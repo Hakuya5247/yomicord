@@ -1,0 +1,27 @@
+{
+  "name": "Yomicord-node24",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "node",
+  "postCreateCommand": "sh -lc \"if [ -f package.json ]; then pnpm install; else echo 'No package.json yet. Skipping pnpm install.'; fi\"",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "npm.packageManager": "pnpm"
+      },
+      "extensions": [
+        "redhat.vscode-yaml",
+        "humao.rest-client",
+        "esbenp.prettier-vscode",
+        "christian-kohler.npm-intellisense",
+        "Orta.vscode-jest",
+        "xabikos.JavaScriptSnippets",
+        "dbaeumer.vscode-eslint",
+        "EditorConfig.EditorConfig",
+        "mikestead.dotenv",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}
