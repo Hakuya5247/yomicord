@@ -1,7 +1,7 @@
 {
   "name": "yomicord",
   "private": true,
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "pnpm@10.26.2",
   "scripts": {
     "dev:api": "pnpm --filter @yomicord/api dev",
     "dev:bot": "pnpm --filter @yomicord/bot dev",
@@ -13,12 +13,12 @@
     "lint:fix": "pnpm -w exec eslint . --fix"
   },
   "devDependencies": {
-    "prettier": "^3.7.4",
-    "eslint": "^9.39.0",
     "@eslint/js": "^9.39.0",
-    "globals": "^15.15.0",
-    "eslint-config-prettier": "^9.1.0",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
-    "@typescript-eslint/parser": "^8.50.0"
+    "@typescript-eslint/parser": "^8.50.0",
+    "eslint": "^9.39.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^15.15.0",
+    "prettier": "^3.7.4"
   }
 }

@@ -23,8 +23,10 @@ jobs:
       - name: pnpm セットアップ
         uses: pnpm/action-setup@v4
         with:
-          version: 9
           run_install: false
+          dest: ~/setup-pnpm
+          package_json_file: package.json
+          standalone: false
 
       - name: Node.js セットアップ
         uses: actions/setup-node@v4
