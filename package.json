@@ -10,7 +10,8 @@
     "format": "pnpm -w exec prettier . --write",
     "format:check": "pnpm -w exec prettier . --check",
     "lint": "pnpm -w exec eslint .",
-    "lint:fix": "pnpm -w exec eslint . --fix"
+    "lint:fix": "pnpm -w exec eslint . --fix",
+    "check": "pnpm format:check && pnpm lint && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

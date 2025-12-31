@@ -1,6 +1,5 @@
-# Yomicord
+# Yomicord(よみこ〜ど)
 
-よみこ〜ど
 Discord のチャットを音声で読み上げる Bot（将来的に WebUI で設定管理）を想定した monorepo（pnpm workspace）です。
 
 ## 重要な方針（最優先）
@@ -27,20 +26,31 @@ Discord のチャットを音声で読み上げる Bot（将来的に WebUI で�
 pnpm install
 ```
 
-## 開発（例）
+## 開発
 
 ```bash
-# API 起動
+# API 起動（workspace: @yomicord/api）
 pnpm dev:api
 
-# Bot 起動
+# Bot 起動（workspace: @yomicord/bot）
 pnpm dev:bot
+
+# contracts 開発（workspace: @yomicord/contracts）
+pnpm dev:contracts
 ```
 
 ## ビルド（必須）
 
 ```bash
 pnpm -r build
+```
+
+## チェック（推奨）
+
+フォーマット/Lint/ビルドをまとめて実行します。
+
+```bash
+pnpm check
 ```
 
 ## CI（GitHub Actions）
@@ -50,7 +60,9 @@ PR / push 時に GitHub Actions で `pnpm -r build` を実行します（workflo
 ## フォーマット / Lint
 
 - フォーマット: Prettier（`.prettierrc.cjs`, `.prettierignore`）
-- Lint: ESLint（`.eslintrc.cjs`, `.eslintignore`）
+  - `pnpm format` / `pnpm format:check`
+- Lint: ESLint（`eslint.config.cjs`）
+  - `pnpm lint` / `pnpm lint:fix`
 
 ## 変更時のルール（実装者向け）
 
