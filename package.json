@@ -2,6 +2,9 @@
   "name": "yomicord",
   "private": true,
   "packageManager": "pnpm@10.26.2",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev:api": "pnpm --filter @yomicord/api dev",
     "dev:bot": "pnpm --filter @yomicord/bot dev",
