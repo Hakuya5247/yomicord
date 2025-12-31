@@ -89,9 +89,12 @@ WebUI も同様に apps/api を呼び出す。
 ## 6. API 設計方針（最小）
 
 - パスは `/v1/...` を基本とし、破壊的変更は `/v2` で対応する。
-- エラー形式は将来的に統一する（例）：
+- エラー形式は以下に統一する（contracts を唯一の真実とする）：
   - 成功：`{ ok: true, ... }`
-  - 失敗：`{ ok: false, code: string, message: string, details?: unknown }`
+  - 失敗：`{ ok: false, error: { code: string, message: string, details?: unknown } }`
+    - `code` は `VALIDATION_FAILED / UNAUTHORIZED / FORBIDDEN / NOT_FOUND / CONFLICT / INTERNAL`
+    - `message` はユーザーに見せても安全な日本語（機微情報・内部例外の露出禁止）
+    - `VALIDATION_FAILED` の `details` は zod の `flatten()` 互換（`formErrors` / `fieldErrors`）を基本とする
 - 受け取る入力は必ず contracts の schema で検証する。
 - 認可が関わる操作は API 側で必ず判定し、Bot/WebUI 側の推測に依存しない。
 
