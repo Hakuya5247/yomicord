@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    name: pnpm -r build
+    name: pnpm check
     runs-on: ubuntu-latest
     steps:
       - name: チェックアウト
@@ -37,5 +37,5 @@ jobs:
       - name: 依存関係インストール（lockfile 厳密）
         run: pnpm install --frozen-lockfile
 
-      - name: ビルド（workspace 全体）
-        run: pnpm -r build
+      - name: チェック（format/lint/build）
+        run: pnpm check
