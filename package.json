@@ -9,12 +9,19 @@
     "dev:api": "pnpm --filter @yomicord/api dev",
     "dev:bot": "pnpm --filter @yomicord/bot dev",
     "dev:contracts": "pnpm --filter @yomicord/contracts dev",
-    "build": "pnpm -r build",
     "format": "pnpm -w exec prettier . --write",
     "format:check": "pnpm -w exec prettier . --check",
     "lint": "pnpm -w exec eslint .",
     "lint:fix": "pnpm -w exec eslint . --fix",
-    "check": "pnpm format:check && pnpm lint && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm build",
+    "build": "pnpm -r build",
+    "build:api": "pnpm --filter @yomicord/api build",
+    "build:bot": "pnpm --filter @yomicord/bot build",
+    "build:contracts": "pnpm --filter @yomicord/contracts build",
+    "typecheck:contracts": "pnpm --filter @yomicord/contracts exec tsc -p tsconfig.json --noEmit",
+    "typecheck:api": "pnpm --filter @yomicord/api exec tsc -p tsconfig.json --noEmit",
+    "typecheck:bot": "pnpm --filter @yomicord/bot exec tsc -p tsconfig.json --noEmit",
+    "start:api": "pnpm --filter @yomicord/api start"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
