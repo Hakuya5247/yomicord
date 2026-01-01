@@ -13,3 +13,5 @@ coverage
 
 **/*.min.*
 pnpm-lock.yaml
+
+.vscode
