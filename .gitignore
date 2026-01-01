@@ -27,6 +27,8 @@ Thumbs.db
 
 .vscode/*
 !.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # --- Dev Containers ---
 .devcontainer/.env

@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build:contracts",
+      "type": "shell",
+      "command": "pnpm --filter @yomicord/contracts build",
+      "problemMatcher": [
+        "$tsc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "dev:api (watch)",
+      "type": "shell",
+      "command": "pnpm dev:api",
+      "dependsOn": [
+        "build:contracts"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:bot (watch)",
+      "type": "shell",
+      "command": "pnpm dev:bot",
+      "dependsOn": [
+        "build:contracts"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "dev:contracts (watch)",
+      "type": "shell",
+      "command": "pnpm dev:contracts",
+      "problemMatcher": []
+    }
+  ]
+}
