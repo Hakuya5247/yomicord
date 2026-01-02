@@ -1,111 +1,21 @@
-import Fastify, { type FastifyReply } from 'fastify';
-import {
-  UpsertDictionaryEntryRequestSchema,
-  UpdateVoiceSettingsRequestSchema,
-  OkResponseSchema,
-  ApiErrorResponseSchema,
-  type ApiErrorCode,
-} from '@yomicord/contracts';
+import { pathToFileURL } from 'node:url';
 
-const app = Fastify({ logger: true });
+import { createApp } from './app.js';
 
-function sendError(
-  reply: FastifyReply,
-  statusCode: number,
-  code: ApiErrorCode,
-  message: string,
-  details?: unknown,
-) {
-  const payload: unknown = {
-    ok: false,
-    error: {
-      code,
-      message,
-      ...(details === undefined ? {} : { details }),
-    },
-  };
+export { createApp };
 
-  const parsed = ApiErrorResponseSchema.safeParse(payload);
-  if (!parsed.success) {
-    return reply.status(500).send({
-      ok: false,
-      error: { code: 'INTERNAL', message: 'サーバー内部でエラーが発生しました' },
-    });
-  }
-
-  return reply.status(statusCode).send(parsed.data);
-}
-
-app.setNotFoundHandler(async (_req, reply) => {
-  return sendError(reply, 404, 'NOT_FOUND', 'エンドポイントが見つかりません');
-});
-
-app.setErrorHandler(async (err, _req, reply) => {
-  // 例外の詳細はログへ（レスポンスには出さない）
-  app.log.error({ err }, 'API で想定外のエラーが発生しました');
-
-  const maybeStatusCode = (err as { statusCode?: unknown })?.statusCode;
-  const statusCode = typeof maybeStatusCode === 'number' ? maybeStatusCode : 500;
-
-  if (statusCode === 400) {
-    return sendError(reply, 400, 'VALIDATION_FAILED', 'リクエストが不正です');
-  }
-  if (statusCode === 401) {
-    return sendError(reply, 401, 'UNAUTHORIZED', '認証が必要です');
-  }
-  if (statusCode === 403) {
-    return sendError(reply, 403, 'FORBIDDEN', '権限がありません');
-  }
-  if (statusCode === 404) {
-    return sendError(reply, 404, 'NOT_FOUND', '見つかりません');
-  }
-  if (statusCode === 409) {
-    return sendError(reply, 409, 'CONFLICT', '競合が発生しました');
-  }
-
-  return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
-});
-
-// In-memory stores (DB導入前の仮)
-// key: `${guildId}:${key}`
-const dictionary = new Map<string, string>();
-// key: guildId
-const voiceSettings = new Map<string, { speakerId: number; speed: number; volume: number }>();
-
-app.get('/health', async () => ({ ok: true }));
-
-app.post('/v1/dictionary/entry', async (req, reply) => {
-  const parsed = UpsertDictionaryEntryRequestSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return sendError(reply, 400, 'VALIDATION_FAILED', '入力内容が不正です', parsed.error.flatten());
-  }
-
-  const { guildId, word, yomi } = parsed.data;
-  dictionary.set(`${guildId}:${word}`, yomi);
-
-  return reply.send(OkResponseSchema.parse({ ok: true }));
-});
-
-app.post('/v1/voice/settings', async (req, reply) => {
-  const parsed = UpdateVoiceSettingsRequestSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return sendError(reply, 400, 'VALIDATION_FAILED', '入力内容が不正です', parsed.error.flatten());
-  }
-
-  const { guildId, speakerId, speed, volume } = parsed.data;
-  voiceSettings.set(guildId, { speakerId, speed, volume });
-
-  return reply.send(OkResponseSchema.parse({ ok: true }));
-});
-
-// ここから起動処理を関数化（top-level await を避ける）
 async function start() {
+  const app = createApp();
   const port = Number(process.env.PORT ?? 8787);
   const host = process.env.HOST ?? '0.0.0.0';
   await app.listen({ port, host });
 }
 
-start().catch((err) => {
-  app.log.error({ err }, 'API の起動に失敗しました');
-  process.exit(1);
-});
+const isEntry = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+if (isEntry) {
+  start().catch((err) => {
+    // ここは app.log が無いので stderr に出す
+    console.error('API の起動に失敗しました', err);
+    process.exit(1);
+  });
+}
