@@ -14,6 +14,7 @@
     "lint": "pnpm -w exec eslint .",
     "lint:fix": "pnpm -w exec eslint . --fix",
     "check": "pnpm format:check && pnpm lint && pnpm build",
+    "check:all": "pnpm check && pnpm test",
     "build": "pnpm -r build",
     "build:api": "pnpm --filter @yomicord/api build",
     "build:bot": "pnpm --filter @yomicord/bot build",
@@ -21,7 +22,8 @@
     "typecheck:contracts": "pnpm --filter @yomicord/contracts exec tsc -p tsconfig.json --noEmit",
     "typecheck:api": "pnpm --filter @yomicord/api exec tsc -p tsconfig.json --noEmit",
     "typecheck:bot": "pnpm --filter @yomicord/bot exec tsc -p tsconfig.json --noEmit",
-    "start:api": "pnpm --filter @yomicord/api start"
+    "start:api": "pnpm --filter @yomicord/api start",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
@@ -30,6 +32,7 @@
     "eslint": "^9.39.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^15.15.0",
-    "prettier": "^3.7.4"
+    "prettier": "^3.7.4",
+    "vitest": "^3.2.4"
   }
 }

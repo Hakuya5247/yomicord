@@ -39,3 +39,6 @@ jobs:
 
       - name: チェック（format/lint/build）
         run: pnpm check
+
+      - name: テスト（vitest）
+        run: pnpm test
