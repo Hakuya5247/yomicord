@@ -5,14 +5,18 @@ import 'dotenv/config';
 
 import { createReadyHandler, createReadyListener } from './readyHandler.js';
 
+// なぜ: Bot 起動の最小入口。Discord 接続と ready ハンドラ登録だけに責務を限定する。
 async function main() {
   const token = process.env.DISCORD_TOKEN;
   if (!token) throw new Error('DISCORD_TOKEN is required');
 
+  // なぜ: baseUrl の末尾スラッシュを正規化し、リクエスト時の二重スラッシュを防ぐ。
   const apiBaseUrl = (process.env.YOMICORD_API_BASEURL ?? 'http://localhost:8787').replace(
     /\/+$/,
     '',
   );
+
+  // TODO(P1): 本番向けに env の検証（URL 形式など）を追加し、起動直後に気づけるようにする。
 
   const client = new Client({
     intents: [GatewayIntentBits.Guilds],
@@ -23,6 +27,8 @@ async function main() {
     fetchFn: fetch,
     logger: console,
   });
+
+  // 注意: Bot 側は DB に触れず、設定・辞書変更は API を呼ぶだけにする。
 
   client.once(
     'ready',
@@ -41,6 +47,7 @@ async function main() {
   }
 }
 
+// なぜ: import 時に勝手にログインしない（テストや再利用を安全にする）。
 const isEntry = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
 if (isEntry) {
   void main().catch((err) => {
