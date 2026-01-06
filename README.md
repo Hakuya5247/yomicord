@@ -20,6 +20,18 @@ Discord のチャットを音声で読み上げる Bot（将来的に WebUI で�
 
 ## セットアップ
 
+### 事前セットアップ
+
+本プロジェクトでは、OpenAI Codex利用時にプロンプト情報などの永続化のためにホストとファイルをバインドマウントで共有しています。(.devcontainer/devcontainer.json参照)
+devcontainerを利用する場合はホスト側において、事前に以下のようにディレクトリを作成しておいてください。
+Codexを利用しない場合においてもディレクトリが存在しない場合はエラーが発生します。
+
+```shell
+mkdir -p ~/.codex
+```
+
+### コンテナ内
+
 前提：Node.js / pnpm（dev container 利用を想定）
 
 ```bash
@@ -51,6 +63,8 @@ pnpm -r build
 
 ```bash
 pnpm check
+pnpm test
+pnpm check:all
 ```
 
 ## CI（GitHub Actions）

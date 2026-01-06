@@ -4,7 +4,8 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "node",
-  "postCreateCommand": "sh -lc \"if [ -f package.json ]; then pnpm install; else echo 'No package.json yet. Skipping pnpm install.'; fi\"",
+  "postCreateCommand": "bash ./.devcontainer/postCreate.sh",
+  "mounts": ["source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind"],
   "customizations": {
     "vscode": {
       "settings": {

@@ -1,5 +1,13 @@
 # Yomicord アーキテクチャ概要
 
+## TL;DR（AI向け要約）
+
+- DBへの読み書きは apps/api のみ
+- APIの入出力は packages/contracts が唯一の真実
+- Bot / Web は UX 専用、認可・整合性は API
+- API変更は contracts → api → bot → docs の順
+- 設計変更があれば architecture.md を更新する
+
 ## 1. 目的
 
 Yomicord は Discord のチャットを音声で読み上げる Bot であり、将来的に WebUI からも辞書・読み上げ設定等を変更できる運用を想定する。
