@@ -156,6 +156,7 @@ erDiagram
 - 1 guild = 1 設定
 - サーバー全体の読み上げ方針・音声デフォルトを定義
 - **読み上げ対象テキストチャンネルは含まない**
+- `opsNotify` は、サーバーに対して運用上の通知を行うことに関する設定
 
 #### 正式 JSON 形（デフォルト）
 
@@ -187,7 +188,7 @@ erDiagram
   },
   "limits": {
     "maxHiraganaLength": 120,
-    "overLimitAction": "SAY_ARYAKU"
+    "overLimitAction": "SAY_IKARYAKU"
   },
   "announce": {
     "onConnect": true,
@@ -197,6 +198,10 @@ erDiagram
   "permissions": {
     "manageMode": "ADMIN_ONLY",
     "allowedRoleIds": []
+  },
+  "opsNotify": {
+    "channelId": null,
+    "levelMin": "NOTICE"
   }
 }
 ```
@@ -318,6 +323,167 @@ normalizeSurface(surface):
   "source": "command",
   "createdAt": "2026-01-01T12:00:00Z"
 }
+```
+
+---
+
+### 5.5 Enum 定義（共通値）
+
+本プロジェクトでは、設定値の揺れや不正値混入を防ぐため、
+**取りうる値が有限な項目はすべて enum（値集合）として定義する**。
+
+- 実装は **Zod の `z.enum([...])`**
+- JSON / TypeScript の実値は **string**
+- UI 表示名（日本語ラベル）は enum に含めない（UI 層で対応）
+
+これにより、
+
+- API / Bot / 将来の WebUI 間で値が完全に一致する
+- 永続化（JSON / DB）時に不正値を防止できる
+- DB 移行時に enum / check 制約へ移行しやすい
+
+#### 名前読み関連
+
+##### 名前の取得元（`nameRead.nameSource`）
+
+| 値         | 意味                 |
+| ---------- | -------------------- |
+| `NICKNAME` | サーバーニックネーム |
+| `USERNAME` | Discord ユーザー名   |
+
+##### 名前の再読み上げルール（`nameRead.repeatMode`）
+
+| 値          | 意味                     |
+| ----------- | ------------------------ |
+| `ALWAYS`    | 毎回名前を読む           |
+| `ON_CHANGE` | 話者が変わった時のみ読む |
+| `COOLDOWN`  | クールダウン後に再度読む |
+
+※ `cooldownSec = 0` の場合は毎回読む。
+
+##### ユーザーごとの正規化指定（`GuildMemberSettings.nameRead.normalize`）
+
+| 値        | 意味                 |
+| --------- | -------------------- |
+| `inherit` | GuildSettings に従う |
+| `on`      | 正規化する           |
+| `off`     | 正規化しない         |
+
+#### フィルタ関連（`filters.*`）
+
+##### メンションの読み上げ方（`filters.mentionMode`）
+
+| 値            | 意味                               |
+| ------------- | ---------------------------------- |
+| `EXPAND`      | `@user` をユーザー名に展開して読む |
+| `IGNORE`      | 読まない                           |
+| `SAY_MENTION` | 「メンション」と読む               |
+
+##### URL の読み上げ方（`filters.urlMode`）
+
+| 値            | 意味             |
+| ------------- | ---------------- |
+| `DOMAIN_ONLY` | ドメインのみ読む |
+| `FULL`        | フルURLを読む    |
+| `IGNORE`      | 読まない         |
+
+##### 絵文字の扱い（`filters.emojiMode`）
+
+| 値       | 意味           |
+| -------- | -------------- |
+| `IGNORE` | 読まない       |
+| `NAME`   | 絵文字名を読む |
+
+##### コードブロックの扱い（`filters.codeBlockMode`）
+
+| 値         | 意味                       |
+| ---------- | -------------------------- |
+| `SAY_CODE` | 「コードがあります」と読む |
+| `IGNORE`   | 無視する                   |
+
+※ 実際のコード内容は読み上げない。
+
+##### 添付ファイルの扱い（`filters.attachmentMode`）
+
+| 値          | 意味                                 |
+| ----------- | ------------------------------------ |
+| `TYPE_ONLY` | 「画像」「ファイル」など種類のみ読む |
+| `IGNORE`    | 読まない                             |
+
+##### 改行の扱い（`filters.newlineMode`）
+
+| 値      | 意味             |
+| ------- | ---------------- |
+| `JOIN`  | 連結して読む     |
+| `PAUSE` | 区切りとして扱う |
+
+#### 制限・権限関連
+
+##### 文字数超過時の挙動（`limits.overLimitAction`）
+
+| 値             | 意味             |
+| -------------- | ---------------- |
+| `SAY_IKARYAKU` | 「以下略」と読む |
+| `IGNORE`       | 読まない         |
+
+##### 設定変更権限（`permissions.manageMode`）
+
+| 値           | 意味       |
+| ------------ | ---------- |
+| `ADMIN_ONLY` | 管理者のみ |
+| `ROLE_BASED` | 指定ロール |
+
+#### 音声エンジン（フェーズ1）
+
+##### 音声エンジン（`voice.engine`）
+
+| 値         | 意味                      |
+| ---------- | ------------------------- |
+| `voicevox` | VOICEVOX（フェーズ1固定） |
+
+※ フェーズ1では `GuildSettings` のみで指定可能。
+※ `GuildMemberSettings` では上書き不可。
+
+#### 運用通知設定の最小ログレベル（`opsNotify.levelMin`）
+
+| 値        | 意味                                     |
+| --------- | ---------------------------------------- |
+| `INFO`    | 参考情報（起動完了など）                 |
+| `NOTICE`  | 運用上把握すべき変化（再起動・更新など） |
+| `WARNING` | 問題発生・対応が必要な状態               |
+
+#### 補足ルール（重要）
+
+- enum 値は **増やすことは可能**だが、**削除・変更は破壊的変更**
+- 新しい値を追加する場合は、必ず：
+  1. ドキュメント更新
+  2. Zod enum 追加
+  3. デフォルト値の妥当性確認
+     を行う
+
+---
+
+### 5.6 API 共通エラー形式（補足）
+
+設定・辞書・監査ログの仕様と合わせて、API の共通エラー形式も contracts に定義する。
+詳細な運用方針は `docs/architecture.md` を参照する。
+
+```ts
+// 例: ApiErrorResponseSchema
+type ApiErrorResponse = {
+  ok: false;
+  error: {
+    code:
+      | 'VALIDATION_FAILED'
+      | 'UNAUTHORIZED'
+      | 'FORBIDDEN'
+      | 'NOT_FOUND'
+      | 'CONFLICT'
+      | 'INTERNAL';
+    message: string;
+    details?: unknown;
+  };
+};
 ```
 
 ---
@@ -493,6 +659,10 @@ type ReadSession = {
 - `Actor.displayName`:
   - 永続化しない（6節参照）
   - 表示時は Discord API から取得
+
+- `opsNotify.channelId`:
+  - string | null
+  - nullの場合はサーバーに対して通知を行わない
 
 ---
 

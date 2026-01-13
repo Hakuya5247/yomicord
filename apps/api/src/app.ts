@@ -1,11 +1,5 @@
 import Fastify, { type FastifyReply } from 'fastify';
-import {
-  UpsertDictionaryEntryRequestSchema,
-  UpdateVoiceSettingsRequestSchema,
-  OkResponseSchema,
-  ApiErrorResponseSchema,
-  type ApiErrorCode,
-} from '@yomicord/contracts';
+import { ApiErrorResponseSchema, type ApiErrorCode } from '@yomicord/contracts';
 
 export function createApp() {
   // なぜ: API は入力検証・エラー整形・永続化（将来）を担う単一の更新窓口。
@@ -73,54 +67,7 @@ export function createApp() {
     return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
   });
 
-  // なぜ: まずは DB なしで API I/F と責務分離を固めるための最小実装。
-  // TODO(P0): 辞書/読み上げ設定を DB 永続化へ移行し、Map ベースの in-memory 実装を削除する。
-  // TODO(P1): 更新系 API に認可と監査ログ（誰が/いつ/何を）を追加する。
-  // key: `${guildId}:${key}`
-  const dictionary = new Map<string, string>();
-  // key: guildId
-  const voiceSettings = new Map<string, { speakerId: number; speed: number; volume: number }>();
-
   app.get('/health', async () => ({ ok: true }));
-
-  app.post('/v1/dictionary/entry', async (req, reply) => {
-    // なぜ: 入力は contracts を唯一の真実として検証し、API 側でも必ず弾く。
-    const parsed = UpsertDictionaryEntryRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return sendError(
-        reply,
-        400,
-        'VALIDATION_FAILED',
-        '入力内容が不正です',
-        parsed.error.flatten(),
-      );
-    }
-
-    const { guildId, word, yomi } = parsed.data;
-    // TODO(P1): 辞書更新の仕様（上書き/拒否/差分なし）と成功時レスポンスの意味を明文化する。
-    dictionary.set(`${guildId}:${word}`, yomi);
-
-    return reply.send(OkResponseSchema.parse({ ok: true }));
-  });
-
-  app.post('/v1/voice/settings', async (req, reply) => {
-    // なぜ: 入力は contracts を唯一の真実として検証し、API 側でも必ず弾く。
-    const parsed = UpdateVoiceSettingsRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return sendError(
-        reply,
-        400,
-        'VALIDATION_FAILED',
-        '入力内容が不正です',
-        parsed.error.flatten(),
-      );
-    }
-
-    const { guildId, speakerId, speed, volume } = parsed.data;
-    voiceSettings.set(guildId, { speakerId, speed, volume });
-
-    return reply.send(OkResponseSchema.parse({ ok: true }));
-  });
 
   return app;
 }
