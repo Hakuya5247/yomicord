@@ -37,3 +37,6 @@ Thumbs.db
 .cache/
 .eslintcache
 coverage/
+
+# --- Data ---
+data/

@@ -10,21 +10,11 @@ async function main() {
   const token = process.env.DISCORD_TOKEN;
   if (!token) throw new Error('DISCORD_TOKEN is required');
 
-  // なぜ: baseUrl の末尾スラッシュを正規化し、リクエスト時の二重スラッシュを防ぐ。
-  const apiBaseUrl = (process.env.YOMICORD_API_BASEURL ?? 'http://localhost:8787').replace(
-    /\/+$/,
-    '',
-  );
-
-  // TODO(P1): 本番向けに env の検証（URL 形式など）を追加し、起動直後に気づけるようにする。
-
   const client = new Client({
     intents: [GatewayIntentBits.Guilds],
   });
 
   const onReady = createReadyHandler({
-    apiBaseUrl,
-    fetchFn: fetch,
     logger: console,
   });
 

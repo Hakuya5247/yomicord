@@ -31,7 +31,9 @@ yomicord/
 │ ├─ api/ # 唯一のDB窓口（認可/検証/整合性/監査を集約）
 │ └─ bot/ # Discord Bot（API経由で設定/辞書を変更）
 ├─ packages/
-│ └─ contracts/ # API入出力の schema と型（zod）
+│ ├─ contracts/ # API入出力の schema と型（zod） + defaults/pure helpers
+│ ├─ storage/ # 永続化方式に依存しない Store interface（境界）
+│ └─ storage-json/ # JSON ファイル実装（フェーズ1）
 └─ docs/
 └─ architecture.md
 ```
@@ -76,11 +78,33 @@ yomicord/
 責務：
 
 - API 入出力の schema（zod）と型の定義
+- デフォルト値生成、正規化、canonicalize などの pure helpers
+- Store 境界で利用する型（Actor など）
 - 破壊的変更を避けたバージョニング方針（後述）
 
 非責務：
 
 - DB アクセス、HTTP 実装
+
+### 4.4 packages/storage（Storage 境界）
+
+責務：
+
+- Store interface の定義（永続化方式に依存しない）
+- エラーは例外で表現（Result 型は使わない）
+
+非責務：
+
+- 永続化の実装
+
+### 4.5 packages/storage-json（フェーズ1 実装）
+
+責務：
+
+- JSON ファイルを永続化先とした Store 実装
+- atomic write（temp file → rename）
+- 読み書き時の Zod validate
+- 監査ログは JSON Lines 形式
 
 ## 5. データフロー（更新）
 
@@ -111,14 +135,28 @@ WebUI も同様に apps/api を呼び出す。
 最低限、以下を永続化対象として想定する：
 
 - guild_settings（サーバー単位）
-  - 読み上げON/OFF、対象チャンネル、音量、速度、話者ID、その他オプション
-- user_settings（ユーザー単位、必要なら）
-  - 個別の話者/読み方など
-- dictionary_entries（辞書）
-  - guildId、word、yomi、createdAt、updatedAt
-  - 制約：`(guildId, key)` をユニーク（重複防止）
+  - 読み上げ方針・音声デフォルト（engine はここにのみ存在）
+- guild_member_settings（ユーザー単位の部分上書き）
+  - voice の一部と nameRead.normalize のみ
+- dictionary_entries（本文辞書）
+  - surface/surfaceKey/reading/priority/isEnabled
+  - 制約：`(guildId, surfaceKey)` をユニーク（重複防止）
+- settings_audit_logs（監査ログ）
+  - entityType/entityId/action/path/before/after/actorUserId/source/createdAt
 
-※ 初期は SQLite などでも良いが、運用を見据えるなら Postgres を本命とする。
+フェーズ1では DB は導入せず、JSON ファイルを永続化先とする（DB は将来差し替え）。
+
+保存構成（フェーズ1）：
+
+```
+data/
+  guild-settings/{guildId}.json
+  guild-members/{guildId}/{userId}.json
+  dictionary/{guildId}.json
+  audit/{guildId}.log.jsonl
+```
+
+※ Runtime State（読み上げ対象チャンネル等）は永続化しない。
 
 ## 8. 認証/認可（将来の運用を見据えた方針）
 
@@ -134,7 +172,7 @@ WebUI も同様に apps/api を呼び出す。
 ## 9. ロギング/監査
 
 - apps/api はリクエストログを記録する（開発時は詳細、本番は個人情報に配慮）。
-- 設定変更や辞書更新は、必要なら「誰が/いつ/何を」変更したかを監査ログとして残せる構成にする。
+- 設定変更や辞書更新は「誰が/いつ/何を」変更したかを監査ログとして残す（フェーズ1から必須）。
 
 ## 10. 開発・運用の基本コマンド（例）
 

@@ -48,25 +48,212 @@ export const ApiErrorResponseSchema = z.object({
 });
 export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
 
-// ---- Dictionary ----
-// なぜ: 入力制約は API 保護（ログ肥大/負荷/保存コスト）と UI の前提を兼ねるため、contracts 側で固定する。
-export const UpsertDictionaryEntryRequestSchema = z.object({
-  guildId: z.string().min(1),
-  word: z.string().min(1).max(64),
-  yomi: z.string().min(1).max(256),
-});
-export type UpsertDictionaryEntryRequest = z.infer<typeof UpsertDictionaryEntryRequestSchema>;
-
 // なぜ: 成功レスポンスも形を固定し、API 側で送信前に schema 検証できるようにする。
 export const OkResponseSchema = z.object({ ok: z.literal(true) });
 export type OkResponse = z.infer<typeof OkResponseSchema>;
 
-// ---- Voice settings (minimal) ----
-// 注意: default は schema 側で確定する（複数クライアントで既定値がズレないようにする）。
-export const UpdateVoiceSettingsRequestSchema = z.object({
-  guildId: z.string().min(1),
-  speakerId: z.number().int().nonnegative(),
-  speed: z.number().min(0.5).max(2.0).default(1.0),
-  volume: z.number().min(0.0).max(2.0).default(1.0),
+// ---- Contracts & Storage (phase1) ----
+// なぜ: 設定・辞書・監査ログの唯一の正を contracts に閉じ込める。
+
+const GuildSettingsVoiceSchema = z.object({
+  engine: z.enum(['voicevox']),
+  speakerId: z.number(),
+  volume: z.number(),
+  speed: z.number(),
+  pitch: z.number(),
+  intonation: z.number(),
 });
-export type UpdateVoiceSettingsRequest = z.infer<typeof UpdateVoiceSettingsRequestSchema>;
+
+const GuildSettingsNameReadSchema = z.object({
+  nameSource: z.enum(['NICKNAME', 'USERNAME']),
+  prefix: z.string(),
+  suffix: z.string(),
+  repeatMode: z.enum(['ALWAYS', 'ON_CHANGE', 'COOLDOWN']),
+  cooldownSec: z.number(),
+  normalizeDefault: z.boolean(),
+});
+
+const GuildSettingsFiltersSchema = z.object({
+  mentionMode: z.enum(['EXPAND', 'IGNORE', 'SAY_MENTION']),
+  urlMode: z.enum(['DOMAIN_ONLY', 'FULL', 'IGNORE']),
+  emojiMode: z.enum(['IGNORE', 'NAME']),
+  codeBlockMode: z.enum(['SAY_CODE', 'IGNORE']),
+  attachmentMode: z.enum(['TYPE_ONLY', 'IGNORE']),
+  newlineMode: z.enum(['JOIN', 'PAUSE']),
+});
+
+const GuildSettingsLimitsSchema = z.object({
+  maxHiraganaLength: z.number(),
+  overLimitAction: z.enum(['SAY_IKARYAKU', 'IGNORE']),
+});
+
+const GuildSettingsAnnounceSchema = z.object({
+  onConnect: z.boolean(),
+  onStartStop: z.boolean(),
+  customText: z.string().nullable(),
+});
+
+const GuildSettingsPermissionsSchema = z.object({
+  manageMode: z.enum(['ADMIN_ONLY', 'ROLE_BASED']),
+  allowedRoleIds: z.array(z.string()),
+});
+
+const GuildSettingsOpsNotifySchema = z.object({
+  channelId: z.string().nullable(),
+  levelMin: z.enum(['INFO', 'NOTICE', 'WARNING']),
+});
+
+export const GuildSettingsSchema = z.object({
+  voice: GuildSettingsVoiceSchema,
+  nameRead: GuildSettingsNameReadSchema,
+  filters: GuildSettingsFiltersSchema,
+  limits: GuildSettingsLimitsSchema,
+  announce: GuildSettingsAnnounceSchema,
+  permissions: GuildSettingsPermissionsSchema,
+  opsNotify: GuildSettingsOpsNotifySchema,
+});
+export type GuildSettings = z.infer<typeof GuildSettingsSchema>;
+
+const GuildMemberVoiceSchema = z.object({
+  speakerId: z.number().optional(),
+  volume: z.number().optional(),
+  speed: z.number().optional(),
+  pitch: z.number().optional(),
+  intonation: z.number().optional(),
+});
+
+const GuildMemberNameReadSchema = z.object({
+  normalize: z.enum(['inherit', 'on', 'off']),
+});
+
+export const GuildMemberSettingsSchema = z.object({
+  voice: GuildMemberVoiceSchema.optional(),
+  nameRead: GuildMemberNameReadSchema.optional(),
+});
+export type GuildMemberSettings = z.infer<typeof GuildMemberSettingsSchema>;
+
+export const DictionaryEntrySchema = z.object({
+  id: z.string(),
+  guildId: z.string(),
+  surface: z.string(),
+  surfaceKey: z.string(),
+  reading: z.string(),
+  priority: z.number(),
+  isEnabled: z.boolean(),
+});
+export type DictionaryEntry = z.infer<typeof DictionaryEntrySchema>;
+
+export const SettingsAuditLogSchema = z.object({
+  id: z.string(),
+  guildId: z.string(),
+  entityType: z.enum(['guild_settings', 'guild_member_settings', 'dictionary_entry']),
+  entityId: z.string().nullable(),
+  action: z.enum(['create', 'update', 'delete']),
+  path: z.string().nullable(),
+  before: z.record(z.unknown()),
+  after: z.record(z.unknown()),
+  actorUserId: z.string().nullable(),
+  source: z.enum(['command', 'api', 'system', 'migration']),
+  createdAt: z.string(),
+});
+export type SettingsAuditLog = z.infer<typeof SettingsAuditLogSchema>;
+
+export type Actor = {
+  userId: string | null;
+  displayName?: string | null;
+  source: 'command' | 'api' | 'system' | 'migration';
+  occurredAt: string;
+};
+
+export const createDefaultGuildSettings = (): GuildSettings => ({
+  voice: {
+    engine: 'voicevox',
+    speakerId: 1,
+    volume: 1.0,
+    speed: 1.0,
+    pitch: 0.0,
+    intonation: 1.0,
+  },
+  nameRead: {
+    nameSource: 'NICKNAME',
+    prefix: '',
+    suffix: 'さん',
+    repeatMode: 'ON_CHANGE',
+    cooldownSec: 120,
+    normalizeDefault: true,
+  },
+  filters: {
+    mentionMode: 'EXPAND',
+    urlMode: 'DOMAIN_ONLY',
+    emojiMode: 'IGNORE',
+    codeBlockMode: 'SAY_CODE',
+    attachmentMode: 'TYPE_ONLY',
+    newlineMode: 'JOIN',
+  },
+  limits: {
+    maxHiraganaLength: 120,
+    overLimitAction: 'SAY_IKARYAKU',
+  },
+  announce: {
+    onConnect: true,
+    onStartStop: false,
+    customText: null,
+  },
+  permissions: {
+    manageMode: 'ADMIN_ONLY',
+    allowedRoleIds: [],
+  },
+  opsNotify: {
+    channelId: null,
+    levelMin: 'NOTICE',
+  },
+});
+
+export const normalizeSurface = (surface: string): string => {
+  // TODO(test): 正規化の順序と空白圧縮の挙動を検証する。
+  const normalized = surface.normalize('NFKC').trim();
+  const lowercased = normalized.toLowerCase();
+  return lowercased.replace(/\s+/g, ' ');
+};
+
+export const canonicalizeGuildMemberSettings = (
+  settings: GuildMemberSettings,
+): GuildMemberSettings | null => {
+  // TODO(test): 空オブジェクトや inherit の削除が行われることを検証する。
+  const parsed = GuildMemberSettingsSchema.parse(settings);
+  const next: GuildMemberSettings = {};
+
+  if (parsed.voice) {
+    const voice: NonNullable<GuildMemberSettings['voice']> = {};
+    if (parsed.voice.speakerId !== undefined) {
+      voice.speakerId = parsed.voice.speakerId;
+    }
+    if (parsed.voice.volume !== undefined) {
+      voice.volume = parsed.voice.volume;
+    }
+    if (parsed.voice.speed !== undefined) {
+      voice.speed = parsed.voice.speed;
+    }
+    if (parsed.voice.pitch !== undefined) {
+      voice.pitch = parsed.voice.pitch;
+    }
+    if (parsed.voice.intonation !== undefined) {
+      voice.intonation = parsed.voice.intonation;
+    }
+    if (Object.keys(voice).length > 0) {
+      next.voice = voice;
+    }
+  }
+
+  if (parsed.nameRead) {
+    if (parsed.nameRead.normalize !== 'inherit') {
+      next.nameRead = { normalize: parsed.nameRead.normalize };
+    }
+  }
+
+  if (Object.keys(next).length === 0) {
+    return null;
+  }
+
+  return next;
+};
