@@ -129,6 +129,8 @@ WebUI も同様に apps/api を呼び出す。
     - `VALIDATION_FAILED` の `details` は zod の `flatten()` 互換（`formErrors` / `fieldErrors`）を基本とする
 - 受け取る入力は必ず contracts の schema で検証する。
 - 認可が関わる操作は API 側で必ず判定し、Bot/WebUI 側の推測に依存しない。
+- 更新操作の Actor は `X-Yomicord-Actor-*` ヘッダーで受け取り、監査・認可に使う。
+  - `Source` と `Occurred-At` は省略可（省略時は API が補完）
 
 ## 7. データモデル（高レベル）
 

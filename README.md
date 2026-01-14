@@ -38,6 +38,12 @@ mkdir -p ~/.codex
 pnpm install
 ```
 
+### 環境変数（API）
+
+- `YOMICORD_DATA_DIR`: 設定/辞書の保存先
+  - Docker 運用の既定は `/data`
+  - ローカル開発では `apps/api/.env.example` を参考に `./data` へ向ける想定
+
 ## 開発
 
 ```bash
