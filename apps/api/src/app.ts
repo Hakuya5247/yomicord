@@ -1,10 +1,27 @@
 import Fastify, { type FastifyReply } from 'fastify';
-import { ApiErrorResponseSchema, type ApiErrorCode } from '@yomicord/contracts';
+import {
+  ActorHeadersSchema,
+  ApiErrorResponseSchema,
+  GuildSettingsGetResponseSchema,
+  GuildSettingsParamsSchema,
+  GuildSettingsPutBodySchema,
+  GuildSettingsPutResponseSchema,
+  type Actor,
+  type ApiErrorCode,
+  type GuildSettings,
+} from '@yomicord/contracts';
+import { JsonGuildSettingsStore } from '@yomicord/storage-json';
 
-export function createApp() {
+type AppOptions = {
+  dataDir?: string;
+};
+
+export function createApp(options: AppOptions = {}) {
   // なぜ: API は入力検証・エラー整形・永続化（将来）を担う単一の更新窓口。
   // 注意: Bot/Web は DB に触れず、必ずこの API を経由する。
   const app = Fastify({ logger: true });
+  const dataDir = options.dataDir ?? process.env.YOMICORD_DATA_DIR ?? '/data';
+  const guildSettingsStore = new JsonGuildSettingsStore(dataDir);
 
   // なぜ: エラー応答の“形”を一箇所に固定し、クライアント側の例外処理を単純にする。
   function sendError(
@@ -34,6 +51,10 @@ export function createApp() {
     }
 
     return reply.status(statusCode).send(parsed.data);
+  }
+
+  function sendValidationError(reply: FastifyReply, error: { flatten: () => unknown }) {
+    return sendError(reply, 400, 'VALIDATION_FAILED', 'リクエストが不正です', error.flatten());
   }
 
   app.setNotFoundHandler(async (_req, reply) => {
@@ -68,6 +89,62 @@ export function createApp() {
   });
 
   app.get('/health', async () => ({ ok: true }));
+
+  app.get('/v1/guilds/:guildId/settings', async (req, reply) => {
+    const params = GuildSettingsParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const settings = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      settings,
+    };
+    const parsed = GuildSettingsGetResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.put('/v1/guilds/:guildId/settings', async (req, reply) => {
+    const params = GuildSettingsParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const actor: Actor = {
+      userId: actorHeaders.data['x-yomicord-actor-user-id'] ?? null,
+      displayName: actorHeaders.data['x-yomicord-actor-display-name'] ?? null,
+      source: actorHeaders.data['x-yomicord-actor-source'] ?? 'system',
+      occurredAt: actorHeaders.data['x-yomicord-actor-occurred-at'] ?? new Date().toISOString(),
+    };
+
+    const body = GuildSettingsPutBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return sendValidationError(reply, body.error);
+    }
+
+    const next: GuildSettings = body.data;
+    await guildSettingsStore.update(params.data.guildId, next, actor);
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      settings: next,
+    };
+    const parsed = GuildSettingsPutResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
 
   return app;
 }

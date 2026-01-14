@@ -488,6 +488,53 @@ type ApiErrorResponse = {
 
 ---
 
+### 5.7 GuildSettings API（v1）
+
+Bot/WebUI から共通で利用する API の最小設計（GuildSettings）。
+
+#### 共通
+
+- パス: `/v1/guilds/:guildId/settings`
+- `:guildId` は文字列（Discord の guildId）
+
+#### 取得（GET）
+
+- Body: なし
+- Response:
+
+```json
+{
+  "ok": true,
+  "guildId": "123",
+  "settings": { "...": "GuildSettings 全体" }
+}
+```
+
+#### 更新（PUT / 全置換）
+
+- Body: `GuildSettings`（全置換）
+- Actor ヘッダー（任意。ただし Bot 操作時は `User-Id` が必須）
+  - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID（Bot からの操作時は必須、system 操作時は null）
+  - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
+  - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
+  - `X-Yomicord-Actor-Display-Name`: 省略可
+- Response:
+
+```json
+{
+  "ok": true,
+  "guildId": "123",
+  "settings": { "...": "GuildSettings 全体" }
+}
+```
+
+補足:
+
+- Actor は監査・認可の文脈で API に渡す。
+- GuildSettings の schema 自体は packages/contracts を唯一の真実とする。
+
+---
+
 ## 6. Actor（操作コンテキスト）
 
 Actor は **永続化しない入力情報**。

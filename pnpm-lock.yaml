@@ -41,6 +41,9 @@ importers:
       '@yomicord/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@yomicord/storage-json':
+        specifier: workspace:*
+        version: link:../../packages/storage-json
       fastify:
         specifier: ^5.6.2
         version: 5.6.2

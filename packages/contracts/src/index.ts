@@ -52,6 +52,18 @@ export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
 export const OkResponseSchema = z.object({ ok: z.literal(true) });
 export type OkResponse = z.infer<typeof OkResponseSchema>;
 
+// ---- API headers (Actor) ----
+// なぜ: 更新操作の監査・認可に必要な最小情報を headers で共通化する。
+export const ActorHeadersSchema = z
+  .object({
+    'x-yomicord-actor-user-id': z.string().min(1).optional(),
+    'x-yomicord-actor-display-name': z.string().min(1).optional(),
+    'x-yomicord-actor-source': z.enum(['command', 'api', 'system', 'migration']).optional(),
+    'x-yomicord-actor-occurred-at': z.string().min(1).optional(),
+  })
+  .passthrough();
+export type ActorHeaders = z.infer<typeof ActorHeadersSchema>;
+
 // ---- Contracts & Storage (phase1) ----
 // なぜ: 設定・辞書・監査ログの唯一の正を contracts に閉じ込める。
 
@@ -113,6 +125,26 @@ export const GuildSettingsSchema = z.object({
   opsNotify: GuildSettingsOpsNotifySchema,
 });
 export type GuildSettings = z.infer<typeof GuildSettingsSchema>;
+
+// ---- API: GuildSettings ----
+// なぜ: params/body/response を contracts に固定し、API とクライアントの整合性を担保する。
+export const GuildSettingsParamsSchema = z.object({
+  guildId: z.string().min(1),
+});
+export type GuildSettingsParams = z.infer<typeof GuildSettingsParamsSchema>;
+
+export const GuildSettingsPutBodySchema = GuildSettingsSchema;
+export type GuildSettingsPutBody = z.infer<typeof GuildSettingsPutBodySchema>;
+
+export const GuildSettingsGetResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  settings: GuildSettingsSchema,
+});
+export type GuildSettingsGetResponse = z.infer<typeof GuildSettingsGetResponseSchema>;
+
+export const GuildSettingsPutResponseSchema = GuildSettingsGetResponseSchema;
+export type GuildSettingsPutResponse = z.infer<typeof GuildSettingsPutResponseSchema>;
 
 const GuildMemberVoiceSchema = z.object({
   speakerId: z.number().optional(),
