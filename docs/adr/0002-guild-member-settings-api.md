@@ -23,6 +23,7 @@
 
 - 基本は本人のみ（`userId` 本人が自分の設定を操作する）。（将来的な変更の可能性あり）
 - API 側で `Actor.userId` と `:userId` の一致を必ず検証する。
+- そのため全操作で `X-Yomicord-Actor-User-Id` を必須とする。
 
 ### 更新時の canonicalize ルール
 
@@ -35,7 +36,7 @@
 ### Actor ヘッダーの扱い
 
 - `X-Yomicord-Actor-*` ヘッダーを受け取る（詳細は ADR-0001 に準拠）。
-- Bot 操作時は `X-Yomicord-Actor-User-Id` が必須。
+- Bot 操作時は `X-Yomicord-Actor-User-Id` が必須（本人一致のため、API 操作も実質必須）。
 - `Display-Name` は永続化しない（監査ログ表示時に取得する）。
 
 ### 取得 / 更新のレスポンス形

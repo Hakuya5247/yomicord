@@ -544,6 +544,7 @@ Bot/WebUI から共通で利用する API の最小設計（GuildMemberSettings�
 - パス: `/v1/guilds/:guildId/members/:userId/settings`
 - `:guildId` / `:userId` は文字列（Discord の guildId / userId）
 - 認可前提: `userId` 本人のみ（API 側で `Actor.userId` と `:userId` の一致を検証）
+- Actor ヘッダー: 全操作で `X-Yomicord-Actor-User-Id` を必須とする（本人一致のため）
 
 #### 取得（GET）
 

@@ -133,6 +133,12 @@ export const GuildSettingsParamsSchema = z.object({
 });
 export type GuildSettingsParams = z.infer<typeof GuildSettingsParamsSchema>;
 
+export const GuildMemberSettingsParamsSchema = z.object({
+  guildId: z.string().min(1),
+  userId: z.string().min(1),
+});
+export type GuildMemberSettingsParams = z.infer<typeof GuildMemberSettingsParamsSchema>;
+
 export const GuildSettingsPutBodySchema = GuildSettingsSchema;
 export type GuildSettingsPutBody = z.infer<typeof GuildSettingsPutBodySchema>;
 
@@ -163,6 +169,29 @@ export const GuildMemberSettingsSchema = z.object({
   nameRead: GuildMemberNameReadSchema.optional(),
 });
 export type GuildMemberSettings = z.infer<typeof GuildMemberSettingsSchema>;
+
+export const GuildMemberSettingsPutBodySchema = GuildMemberSettingsSchema;
+export type GuildMemberSettingsPutBody = z.infer<typeof GuildMemberSettingsPutBodySchema>;
+
+export const GuildMemberSettingsGetResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  userId: z.string().min(1),
+  settings: GuildMemberSettingsSchema.nullable(),
+});
+export type GuildMemberSettingsGetResponse = z.infer<typeof GuildMemberSettingsGetResponseSchema>;
+
+export const GuildMemberSettingsPutResponseSchema = GuildMemberSettingsGetResponseSchema;
+export type GuildMemberSettingsPutResponse = z.infer<typeof GuildMemberSettingsPutResponseSchema>;
+
+export const GuildMemberSettingsDeleteResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  userId: z.string().min(1),
+});
+export type GuildMemberSettingsDeleteResponse = z.infer<
+  typeof GuildMemberSettingsDeleteResponseSchema
+>;
 
 export const DictionaryEntrySchema = z.object({
   id: z.string(),
