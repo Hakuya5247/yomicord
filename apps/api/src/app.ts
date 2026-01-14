@@ -2,15 +2,22 @@ import Fastify, { type FastifyReply } from 'fastify';
 import {
   ActorHeadersSchema,
   ApiErrorResponseSchema,
+  GuildMemberSettingsDeleteResponseSchema,
+  GuildMemberSettingsGetResponseSchema,
+  GuildMemberSettingsParamsSchema,
+  GuildMemberSettingsPutBodySchema,
+  GuildMemberSettingsPutResponseSchema,
   GuildSettingsGetResponseSchema,
   GuildSettingsParamsSchema,
   GuildSettingsPutBodySchema,
   GuildSettingsPutResponseSchema,
+  canonicalizeGuildMemberSettings,
   type Actor,
+  type ActorHeaders,
   type ApiErrorCode,
   type GuildSettings,
 } from '@yomicord/contracts';
-import { JsonGuildSettingsStore } from '@yomicord/storage-json';
+import { JsonGuildMemberSettingsStore, JsonGuildSettingsStore } from '@yomicord/storage-json';
 
 type AppOptions = {
   dataDir?: string;
@@ -22,6 +29,7 @@ export function createApp(options: AppOptions = {}) {
   const app = Fastify({ logger: true });
   const dataDir = options.dataDir ?? process.env.YOMICORD_DATA_DIR ?? '/data';
   const guildSettingsStore = new JsonGuildSettingsStore(dataDir);
+  const guildMemberSettingsStore = new JsonGuildMemberSettingsStore(dataDir);
 
   // なぜ: エラー応答の“形”を一箇所に固定し、クライアント側の例外処理を単純にする。
   function sendError(
@@ -55,6 +63,26 @@ export function createApp(options: AppOptions = {}) {
 
   function sendValidationError(reply: FastifyReply, error: { flatten: () => unknown }) {
     return sendError(reply, 400, 'VALIDATION_FAILED', 'リクエストが不正です', error.flatten());
+  }
+
+  function buildActor(headers: ActorHeaders): Actor {
+    return {
+      userId: headers['x-yomicord-actor-user-id'] ?? null,
+      displayName: headers['x-yomicord-actor-display-name'] ?? null,
+      source: headers['x-yomicord-actor-source'] ?? 'system',
+      occurredAt: headers['x-yomicord-actor-occurred-at'] ?? new Date().toISOString(),
+    };
+  }
+
+  function assertMemberOwner(
+    reply: FastifyReply,
+    actor: Actor,
+    userId: string,
+  ): FastifyReply | null {
+    if (!actor.userId || actor.userId !== userId) {
+      return sendError(reply, 403, 'FORBIDDEN', '権限がありません');
+    }
+    return null;
   }
 
   app.setNotFoundHandler(async (_req, reply) => {
@@ -120,12 +148,7 @@ export function createApp(options: AppOptions = {}) {
       return sendValidationError(reply, actorHeaders.error);
     }
 
-    const actor: Actor = {
-      userId: actorHeaders.data['x-yomicord-actor-user-id'] ?? null,
-      displayName: actorHeaders.data['x-yomicord-actor-display-name'] ?? null,
-      source: actorHeaders.data['x-yomicord-actor-source'] ?? 'system',
-      occurredAt: actorHeaders.data['x-yomicord-actor-occurred-at'] ?? new Date().toISOString(),
-    };
+    const actor = buildActor(actorHeaders.data);
 
     const body = GuildSettingsPutBodySchema.safeParse(req.body);
     if (!body.success) {
@@ -140,6 +163,114 @@ export function createApp(options: AppOptions = {}) {
       settings: next,
     };
     const parsed = GuildSettingsPutResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.get('/v1/guilds/:guildId/members/:userId/settings', async (req, reply) => {
+    const params = GuildMemberSettingsParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const forbidden = assertMemberOwner(reply, actor, params.data.userId);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    const settings = await guildMemberSettingsStore.get(params.data.guildId, params.data.userId);
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      userId: params.data.userId,
+      settings,
+    };
+    const parsed = GuildMemberSettingsGetResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.put('/v1/guilds/:guildId/members/:userId/settings', async (req, reply) => {
+    const params = GuildMemberSettingsParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const forbidden = assertMemberOwner(reply, actor, params.data.userId);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    const body = GuildMemberSettingsPutBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return sendValidationError(reply, body.error);
+    }
+
+    const canonical = canonicalizeGuildMemberSettings(body.data);
+    if (!canonical) {
+      await guildMemberSettingsStore.delete(params.data.guildId, params.data.userId, actor);
+    } else {
+      await guildMemberSettingsStore.upsert(
+        params.data.guildId,
+        params.data.userId,
+        canonical,
+        actor,
+      );
+    }
+
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      userId: params.data.userId,
+      settings: canonical,
+    };
+    const parsed = GuildMemberSettingsPutResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.delete('/v1/guilds/:guildId/members/:userId/settings', async (req, reply) => {
+    const params = GuildMemberSettingsParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const forbidden = assertMemberOwner(reply, actor, params.data.userId);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    await guildMemberSettingsStore.delete(params.data.guildId, params.data.userId, actor);
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      userId: params.data.userId,
+    };
+    const parsed = GuildMemberSettingsDeleteResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }

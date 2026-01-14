@@ -535,6 +535,75 @@ Bot/WebUI から共通で利用する API の最小設計（GuildSettings）。
 
 ---
 
+### 5.8 GuildMemberSettings API（v1）
+
+Bot/WebUI から共通で利用する API の最小設計（GuildMemberSettings）。
+
+#### 共通
+
+- パス: `/v1/guilds/:guildId/members/:userId/settings`
+- `:guildId` / `:userId` は文字列（Discord の guildId / userId）
+- 認可前提: `userId` 本人のみ（API 側で `Actor.userId` と `:userId` の一致を検証）
+- Actor ヘッダー: 全操作で `X-Yomicord-Actor-User-Id` を必須とする（本人一致のため）
+
+#### 取得（GET）
+
+- Body: なし
+- Response:
+
+```json
+{
+  "ok": true,
+  "guildId": "123",
+  "userId": "456",
+  "settings": { "...": "GuildMemberSettings（存在しない場合は null）" }
+}
+```
+
+#### 更新（PUT / 全置換）
+
+- Body: `GuildMemberSettings`（部分上書きの全体）
+- Actor ヘッダー（任意。ただし Bot 操作時は `User-Id` が必須）
+  - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID（Bot からの操作時は必須、system 操作時は null）
+  - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
+  - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
+  - `X-Yomicord-Actor-Display-Name`: 省略可
+- canonicalize（保存前の正規化）:
+  - `voice` が空なら削除
+  - `nameRead.normalize === "inherit"` は `nameRead` を削除
+  - 結果が空オブジェクトなら保存せず削除
+- Response:
+
+```json
+{
+  "ok": true,
+  "guildId": "123",
+  "userId": "456",
+  "settings": { "...": "canonicalize 後の GuildMemberSettings（空なら null）" }
+}
+```
+
+#### 削除（DELETE）
+
+- Body: なし
+- Actor ヘッダーは PUT と同様（監査・認可のため受け取る）
+- Response:
+
+```json
+{
+  "ok": true,
+  "guildId": "123",
+  "userId": "456"
+}
+```
+
+補足:
+
+- Actor は監査・認可の文脈で API に渡す。
+- GuildMemberSettings の schema と canonicalize は packages/contracts を唯一の真実とする。
+
+---
+
 ## 6. Actor（操作コンテキスト）
 
 Actor は **永続化しない入力情報**。

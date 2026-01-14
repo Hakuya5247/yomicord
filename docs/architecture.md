@@ -131,6 +131,9 @@ WebUI も同様に apps/api を呼び出す。
 - 認可が関わる操作は API 側で必ず判定し、Bot/WebUI 側の推測に依存しない。
 - 更新操作の Actor は `X-Yomicord-Actor-*` ヘッダーで受け取り、監査・認可に使う。
   - `Source` と `Occurred-At` は省略可（省略時は API が補完）
+- GuildMemberSettings API は `/v1/guilds/:guildId/members/:userId/settings` で提供する（GET/PUT/DELETE）。
+  - GET は設定が存在しない場合 `null` を返す。
+  - PUT は canonicalize 後に保存し、空なら削除する。
 
 ## 7. データモデル（高レベル）
 
@@ -168,6 +171,8 @@ data/
 - WebUI：
   - Discord OAuth2 を想定
   - API はアクセストークン（またはセッション）に基づいて認証する
+- GuildMemberSettings の認可:
+  - `Actor.userId` と `:userId` の一致を API 側で必須とする（フェーズ1では本人のみ操作可）
 
 ※ 初期は簡略化しても良いが、最終的に「API が認可の正」となるように寄せる。
 
