@@ -268,6 +268,24 @@ export const SettingsAuditLogSchema = z.object({
 });
 export type SettingsAuditLog = z.infer<typeof SettingsAuditLogSchema>;
 
+// ---- API: SettingsAuditLog ----
+export const SettingsAuditLogListParamsSchema = z.object({
+  guildId: z.string().min(1),
+});
+export type SettingsAuditLogListParams = z.infer<typeof SettingsAuditLogListParamsSchema>;
+
+export const SettingsAuditLogListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+export type SettingsAuditLogListQuery = z.infer<typeof SettingsAuditLogListQuerySchema>;
+
+export const SettingsAuditLogListResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  items: z.array(SettingsAuditLogSchema),
+});
+export type SettingsAuditLogListResponse = z.infer<typeof SettingsAuditLogListResponseSchema>;
+
 export type Actor = {
   userId: string | null;
   displayName?: string | null;
