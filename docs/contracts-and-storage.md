@@ -660,6 +660,61 @@ Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）�
 
 ---
 
+### 5.10 SettingsAuditLog API（v1）
+
+Bot/WebUI から共通で利用する API の最小設計（SettingsAuditLog）。
+
+#### 共通
+
+- パス: `/v1/guilds/:guildId/audit-logs`
+- `:guildId` は文字列（Discord の guildId）
+- 取得専用（読み取りのみ、更新/削除 API は提供しない）
+- 認可は `permissions.manageMode` に連動し、API 側で判定する
+- Actor ヘッダーは全操作で受け取る（監査・認可のため）
+  - `X-Yomicord-Actor-User-Id`: **必須**（操作者の Discord User ID）
+  - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
+  - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
+  - `X-Yomicord-Actor-Display-Name`: 省略可
+  - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
+  - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
+
+#### 一覧取得（GET）
+
+- query:
+  - `limit?: number`（最小 1 / 最大 200 / 未指定時は 50）
+- createdAt 降順（新しい順）で最大 limit 件を返す
+- API は limit 未指定時に 50 を補完し、Store に渡す
+- Response:
+
+```json
+{
+  "ok": true,
+  "guildId": "123",
+  "items": [
+    {
+      "id": "uuid",
+      "guildId": "123",
+      "entityType": "dictionary_entry",
+      "entityId": "abc-uuid",
+      "action": "update",
+      "path": "reading",
+      "before": { "reading": "えーぴーあい" },
+      "after": { "reading": "エーピーアイ" },
+      "actorUserId": "456",
+      "source": "command",
+      "createdAt": "2026-01-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+補足:
+
+- SettingsAuditLog の schema は packages/contracts を唯一の真実とする。
+- 監査ログは API が内部で追記するもので、クライアントからの作成は受け付けない。
+
+---
+
 ## 6. Actor（操作コンテキスト）
 
 Actor は **永続化しない入力情報**。

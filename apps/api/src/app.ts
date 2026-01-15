@@ -20,6 +20,9 @@ import {
   GuildSettingsParamsSchema,
   GuildSettingsPutBodySchema,
   GuildSettingsPutResponseSchema,
+  SettingsAuditLogListParamsSchema,
+  SettingsAuditLogListQuerySchema,
+  SettingsAuditLogListResponseSchema,
   normalizeSurface,
   canonicalizeGuildMemberSettings,
   type Actor,
@@ -36,6 +39,7 @@ import {
   JsonDictionaryStore,
   JsonGuildMemberSettingsStore,
   JsonGuildSettingsStore,
+  JsonAuditLogStore,
 } from '@yomicord/storage-json';
 
 type AppOptions = {
@@ -50,6 +54,7 @@ export function createApp(options: AppOptions = {}) {
   const guildSettingsStore = new JsonGuildSettingsStore(dataDir);
   const guildMemberSettingsStore = new JsonGuildMemberSettingsStore(dataDir);
   const dictionaryStore = new JsonDictionaryStore(dataDir);
+  const auditLogStore = new JsonAuditLogStore(dataDir);
 
   // なぜ: エラー応答の“形”を一箇所に固定し、クライアント側の例外処理を単純にする。
   function sendError(
@@ -586,6 +591,56 @@ export function createApp(options: AppOptions = {}) {
       entryId: params.data.entryId,
     };
     const parsed = DictionaryEntryDeleteResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.get('/v1/guilds/:guildId/audit-logs', async (req, reply) => {
+    const params = SettingsAuditLogListParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const query = SettingsAuditLogListQuerySchema.safeParse(req.query);
+    if (!query.success) {
+      return sendValidationError(reply, query.error);
+    }
+
+    if (
+      !actorHeaders.data['x-yomicord-actor-user-id'] ||
+      !actorHeaders.data['x-yomicord-actor-role-ids'] ||
+      !actorHeaders.data['x-yomicord-actor-is-admin']
+    ) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const actorWithRoles = applyActorRoles(actorHeaders.data, actor);
+    if (!actorWithRoles) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
+
+    const settings = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const forbidden = assertManagePermission(reply, actorWithRoles, settings);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    const limit = query.data.limit ?? 50;
+    const items = await auditLogStore.listByGuild(params.data.guildId, limit);
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      items,
+    };
+    const parsed = SettingsAuditLogListResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
