@@ -619,20 +619,32 @@ Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）�
   - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
   - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
   - `X-Yomicord-Actor-Display-Name`: 省略可
+  - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
+  - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
 
 #### 一覧取得（GET）
 
-- pagination/limit 前提で取得する
+- cursor 方式の pagination/limit 前提で取得する（既定 limit: 50）
+- query:
+  - `limit?: number`（最小 1 / 最大 200 / 未指定時は 50）
+  - `cursor?: string`（未指定なら先頭、無効な cursor は `VALIDATION_FAILED`）
+- cursor は `"{priority}:{surfaceLength}:{id}"` を base64 化した文字列
+- Response は `items` と `nextCursor` を返す（終端は `nextCursor: null`）
 - 具体的な query/response schema は packages/contracts を唯一の真実とする
 
 #### 作成（POST）
 
 - 辞書エントリを新規作成する
+- Body は `{ surface, reading, priority, isEnabled }`（`id` / `guildId` / `surfaceKey` は含めない）
+- `surfaceKey` は `surface` から API 側で正規化して生成する
 - `guildId + surfaceKey` の重複は `CONFLICT` とする
 
 #### 更新（PUT / 全置換）
 
 - 単一エントリを **全置換** で更新する（partial update ではない）
+- Body は `{ surface, reading, priority, isEnabled }`（`id` / `guildId` / `surfaceKey` は含めない）
+- `id` / `guildId` は params を正とし、更新で変更できない
+- `surfaceKey` は `surface` から再計算する
 
 #### 削除（DELETE）
 
