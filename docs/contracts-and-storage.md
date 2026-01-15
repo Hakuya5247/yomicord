@@ -604,6 +604,47 @@ Bot/WebUI から共通で利用する API の最小設計（GuildMemberSettings�
 
 ---
 
+### 5.9 DictionaryEntry API（v1）
+
+Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）。
+
+#### 共通
+
+- パス（一覧/作成）: `/v1/guilds/:guildId/dictionary`
+- パス（単一更新/削除）: `/v1/guilds/:guildId/dictionary/:entryId`
+- `:guildId` / `:entryId` は文字列
+- 認可は `permissions.manageMode` に連動し、API 側で判定する
+- Actor ヘッダーは全操作で受け取る（監査・認可のため）
+  - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID（Bot からの操作時は必須、system 操作時は null）
+  - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
+  - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
+  - `X-Yomicord-Actor-Display-Name`: 省略可
+
+#### 一覧取得（GET）
+
+- pagination/limit 前提で取得する
+- 具体的な query/response schema は packages/contracts を唯一の真実とする
+
+#### 作成（POST）
+
+- 辞書エントリを新規作成する
+- `guildId + surfaceKey` の重複は `CONFLICT` とする
+
+#### 更新（PUT / 全置換）
+
+- 単一エントリを **全置換** で更新する（partial update ではない）
+
+#### 削除（DELETE）
+
+- 単一エントリを削除する
+
+補足:
+
+- Actor は監査・認可の文脈で API に渡す。
+- DictionaryEntry の schema は packages/contracts を唯一の真実とする。
+
+---
+
 ## 6. Actor（操作コンテキスト）
 
 Actor は **永続化しない入力情報**。
@@ -689,7 +730,16 @@ interface GuildMemberSettingsStore {
 
 ```ts
 interface DictionaryStore {
-  listByGuild(guildId: string): Promise<DictionaryEntry[]>;
+  listByGuild(
+    guildId: string,
+    options: {
+      limit: number;
+      cursor?: string | null;
+    },
+  ): Promise<{
+    items: DictionaryEntry[];
+    nextCursor: string | null;
+  }>;
 
   /**
    * 辞書エントリを新規作成。
@@ -697,10 +747,13 @@ interface DictionaryStore {
    */
   create(guildId: string, entry: DictionaryEntry, actor: Actor): Promise<void>;
 
-  update(
+  /**
+   * 単一エントリを全置換で更新。
+   */
+  replace(
     guildId: string,
     entryId: string,
-    patch: Partial<Pick<DictionaryEntry, 'reading' | 'priority' | 'isEnabled'>>,
+    next: DictionaryEntry,
     actor: Actor,
   ): Promise<void>;
 
