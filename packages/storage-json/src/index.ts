@@ -18,6 +18,8 @@ import type {
 } from '@yomicord/contracts';
 import {
   DuplicateSurfaceKeyError,
+  DictionaryEntryNotFoundError,
+  InvalidCursorError,
   type AuditLogStore,
   type DictionaryStore,
   type GuildMemberSettingsStore,
@@ -227,6 +229,51 @@ export class JsonDictionaryStore implements DictionaryStore {
     this.dataDir = dataDir;
   }
 
+  private static buildCursor(entry: DictionaryEntry): string {
+    const raw = `${entry.priority}:${entry.surface.length}:${entry.id}`;
+    return Buffer.from(raw, 'utf8').toString('base64');
+  }
+
+  private static parseCursor(cursor: string): {
+    priority: number;
+    surfaceLength: number;
+    id: string;
+  } {
+    try {
+      const decoded = Buffer.from(cursor, 'base64').toString('utf8');
+      const [priorityRaw, surfaceLengthRaw, id] = decoded.split(':');
+      const priority = Number(priorityRaw);
+      const surfaceLength = Number(surfaceLengthRaw);
+      if (!id || Number.isNaN(priority) || Number.isNaN(surfaceLength)) {
+        throw new InvalidCursorError(cursor);
+      }
+      return { priority, surfaceLength, id };
+    } catch (error) {
+      if (error instanceof InvalidCursorError) {
+        throw error;
+      }
+      throw new InvalidCursorError(cursor);
+    }
+  }
+
+  private static compareEntries(a: DictionaryEntry, b: DictionaryEntry): number {
+    if (a.priority !== b.priority) {
+      return b.priority - a.priority;
+    }
+    const aLength = a.surface.length;
+    const bLength = b.surface.length;
+    if (aLength !== bLength) {
+      return bLength - aLength;
+    }
+    if (a.id < b.id) {
+      return -1;
+    }
+    if (a.id > b.id) {
+      return 1;
+    }
+    return 0;
+  }
+
   private async readEntries(filePath: string): Promise<DictionaryEntry[]> {
     const raw = await readJsonFile(filePath);
     if (raw === null) {
@@ -235,9 +282,36 @@ export class JsonDictionaryStore implements DictionaryStore {
     return DictionaryEntrySchema.array().parse(raw);
   }
 
-  async listByGuild(guildId: string): Promise<DictionaryEntry[]> {
+  async listByGuild(
+    guildId: string,
+    options: { limit: number; cursor?: string | null },
+  ): Promise<{ items: DictionaryEntry[]; nextCursor: string | null }> {
     const filePath = dataPaths.dictionary(this.dataDir, guildId);
-    return this.mutex.runExclusive(filePath, async () => this.readEntries(filePath));
+    return this.mutex.runExclusive(filePath, async () => {
+      const entries = await this.readEntries(filePath);
+      const sorted = entries.slice().sort(JsonDictionaryStore.compareEntries);
+      let startIndex = 0;
+      if (options.cursor) {
+        const cursorKey = JsonDictionaryStore.parseCursor(options.cursor);
+        const cursorIndex = sorted.findIndex(
+          (entry) =>
+            entry.priority === cursorKey.priority &&
+            entry.surface.length === cursorKey.surfaceLength &&
+            entry.id === cursorKey.id,
+        );
+        if (cursorIndex === -1) {
+          throw new InvalidCursorError(options.cursor);
+        }
+        startIndex = cursorIndex + 1;
+      }
+      const page = sorted.slice(startIndex, startIndex + options.limit);
+      const hasMore = startIndex + options.limit < sorted.length;
+      return {
+        items: page,
+        nextCursor:
+          hasMore && page.length > 0 ? JsonDictionaryStore.buildCursor(page.at(-1)!) : null,
+      };
+    });
   }
 
   async create(guildId: string, entry: DictionaryEntry, _actor: Actor): Promise<void> {
@@ -255,10 +329,10 @@ export class JsonDictionaryStore implements DictionaryStore {
     });
   }
 
-  async update(
+  async replace(
     guildId: string,
     entryId: string,
-    patch: Partial<Pick<DictionaryEntry, 'reading' | 'priority' | 'isEnabled'>>,
+    nextEntry: DictionaryEntry,
     _actor: Actor,
   ): Promise<void> {
     const filePath = dataPaths.dictionary(this.dataDir, guildId);
@@ -267,10 +341,12 @@ export class JsonDictionaryStore implements DictionaryStore {
       const entries = await this.readEntries(filePath);
       const index = entries.findIndex((item) => item.id === entryId);
       if (index === -1) {
-        throw new Error(`Dictionary entry not found: ${entryId}`);
+        throw new DictionaryEntryNotFoundError(entryId);
       }
-      const updated = { ...entries[index], ...patch };
-      const parsedEntry = DictionaryEntrySchema.parse(updated);
+      if (entries.some((item) => item.id !== entryId && item.surfaceKey === nextEntry.surfaceKey)) {
+        throw new DuplicateSurfaceKeyError(guildId, nextEntry.surfaceKey);
+      }
+      const parsedEntry = DictionaryEntrySchema.parse(nextEntry);
       const next = entries.slice();
       next[index] = parsedEntry;
       await writeJsonAtomic(filePath, DictionaryEntrySchema.array().parse(next) as JsonValue);
@@ -284,7 +360,7 @@ export class JsonDictionaryStore implements DictionaryStore {
       const entries = await this.readEntries(filePath);
       const next = entries.filter((item) => item.id !== entryId);
       if (next.length === entries.length) {
-        throw new Error(`Dictionary entry not found: ${entryId}`);
+        throw new DictionaryEntryNotFoundError(entryId);
       }
       await writeJsonAtomic(filePath, DictionaryEntrySchema.array().parse(next) as JsonValue);
     });

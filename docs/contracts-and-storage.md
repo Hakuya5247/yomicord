@@ -604,6 +604,62 @@ Bot/WebUI から共通で利用する API の最小設計（GuildMemberSettings�
 
 ---
 
+### 5.9 DictionaryEntry API（v1）
+
+Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）。
+
+#### 共通
+
+- パス（一覧/作成）: `/v1/guilds/:guildId/dictionary`
+- パス（単一更新/削除）: `/v1/guilds/:guildId/dictionary/:entryId`
+- `:guildId` / `:entryId` は文字列
+- 認可は `permissions.manageMode` に連動し、API 側で判定する
+- Actor ヘッダーは全操作で受け取る（監査・認可のため）
+  - `X-Yomicord-Actor-User-Id`: **必須**（操作者の Discord User ID）
+  - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
+  - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
+  - `X-Yomicord-Actor-Display-Name`: 省略可
+  - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
+  - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
+
+#### 一覧取得（GET）
+
+- cursor 方式の pagination/limit 前提で取得する（既定 limit: 50）
+- query:
+  - `limit?: number`（最小 1 / 最大 200 / 未指定時は 50）
+  - `cursor?: string`（未指定なら先頭、無効な cursor は `VALIDATION_FAILED`）
+- cursor は `"{priority}:{surfaceLength}:{id}"` を base64 化した文字列
+- Response は `items` と `nextCursor` を返す（終端は `nextCursor: null`）
+- 具体的な query/response schema は packages/contracts を唯一の真実とする
+- 補足: 更新/削除により cursor が無効化された場合は `VALIDATION_FAILED` とする
+
+#### 作成（POST）
+
+- 辞書エントリを新規作成する
+- Body は `{ surface, reading, priority, isEnabled }`（`id` / `guildId` / `surfaceKey` は含めない）
+- `priority` は整数
+- `surfaceKey` は `surface` から API 側で正規化して生成する
+- `guildId + surfaceKey` の重複は `CONFLICT` とする
+
+#### 更新（PUT / 全置換）
+
+- 単一エントリを **全置換** で更新する（partial update ではない）
+- Body は `{ surface, reading, priority, isEnabled }`（`id` / `guildId` / `surfaceKey` は含めない）
+- `priority` は整数
+- `id` / `guildId` は params を正とし、更新で変更できない
+- `surfaceKey` は `surface` から再計算する
+
+#### 削除（DELETE）
+
+- 単一エントリを削除する
+
+補足:
+
+- Actor は監査・認可の文脈で API に渡す。
+- DictionaryEntry の schema は packages/contracts を唯一の真実とする。
+
+---
+
 ## 6. Actor（操作コンテキスト）
 
 Actor は **永続化しない入力情報**。
@@ -689,7 +745,16 @@ interface GuildMemberSettingsStore {
 
 ```ts
 interface DictionaryStore {
-  listByGuild(guildId: string): Promise<DictionaryEntry[]>;
+  listByGuild(
+    guildId: string,
+    options: {
+      limit: number;
+      cursor?: string | null;
+    },
+  ): Promise<{
+    items: DictionaryEntry[];
+    nextCursor: string | null;
+  }>;
 
   /**
    * 辞書エントリを新規作成。
@@ -697,12 +762,10 @@ interface DictionaryStore {
    */
   create(guildId: string, entry: DictionaryEntry, actor: Actor): Promise<void>;
 
-  update(
-    guildId: string,
-    entryId: string,
-    patch: Partial<Pick<DictionaryEntry, 'reading' | 'priority' | 'isEnabled'>>,
-    actor: Actor,
-  ): Promise<void>;
+  /**
+   * 単一エントリを全置換で更新。
+   */
+  replace(guildId: string, entryId: string, next: DictionaryEntry, actor: Actor): Promise<void>;
 
   delete(guildId: string, entryId: string, actor: Actor): Promise<void>;
 }

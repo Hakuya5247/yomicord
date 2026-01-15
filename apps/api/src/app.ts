@@ -1,7 +1,16 @@
+import { randomUUID } from 'node:crypto';
+
 import Fastify, { type FastifyReply } from 'fastify';
 import {
   ActorHeadersSchema,
   ApiErrorResponseSchema,
+  DictionaryEntryBodySchema,
+  DictionaryEntryDeleteResponseSchema,
+  DictionaryEntryParamsSchema,
+  DictionaryEntryResponseSchema,
+  DictionaryListParamsSchema,
+  DictionaryListQuerySchema,
+  DictionaryListResponseSchema,
   GuildMemberSettingsDeleteResponseSchema,
   GuildMemberSettingsGetResponseSchema,
   GuildMemberSettingsParamsSchema,
@@ -11,13 +20,23 @@ import {
   GuildSettingsParamsSchema,
   GuildSettingsPutBodySchema,
   GuildSettingsPutResponseSchema,
+  normalizeSurface,
   canonicalizeGuildMemberSettings,
   type Actor,
   type ActorHeaders,
   type ApiErrorCode,
   type GuildSettings,
 } from '@yomicord/contracts';
-import { JsonGuildMemberSettingsStore, JsonGuildSettingsStore } from '@yomicord/storage-json';
+import {
+  DictionaryEntryNotFoundError,
+  DuplicateSurfaceKeyError,
+  InvalidCursorError,
+} from '@yomicord/storage';
+import {
+  JsonDictionaryStore,
+  JsonGuildMemberSettingsStore,
+  JsonGuildSettingsStore,
+} from '@yomicord/storage-json';
 
 type AppOptions = {
   dataDir?: string;
@@ -30,6 +49,7 @@ export function createApp(options: AppOptions = {}) {
   const dataDir = options.dataDir ?? process.env.YOMICORD_DATA_DIR ?? '/data';
   const guildSettingsStore = new JsonGuildSettingsStore(dataDir);
   const guildMemberSettingsStore = new JsonGuildMemberSettingsStore(dataDir);
+  const dictionaryStore = new JsonDictionaryStore(dataDir);
 
   // なぜ: エラー応答の“形”を一箇所に固定し、クライアント側の例外処理を単純にする。
   function sendError(
@@ -69,9 +89,51 @@ export function createApp(options: AppOptions = {}) {
     return {
       userId: headers['x-yomicord-actor-user-id'] ?? null,
       displayName: headers['x-yomicord-actor-display-name'] ?? null,
+      roleIds: [],
+      isAdmin: false,
       source: headers['x-yomicord-actor-source'] ?? 'system',
       occurredAt: headers['x-yomicord-actor-occurred-at'] ?? new Date().toISOString(),
     };
+  }
+
+  function parseRoleIds(raw: string | undefined): string[] | null {
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== 'string')) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  function parseIsAdmin(raw: string | undefined): boolean | null {
+    if (!raw) {
+      return false;
+    }
+    if (raw === 'true') {
+      return true;
+    }
+    if (raw === 'false') {
+      return false;
+    }
+    return null;
+  }
+
+  function applyActorRoles(headers: ActorHeaders, actor: Actor): Actor | null {
+    const roleIds = parseRoleIds(headers['x-yomicord-actor-role-ids']);
+    if (!roleIds) {
+      return null;
+    }
+    const isAdmin = parseIsAdmin(headers['x-yomicord-actor-is-admin']);
+    if (isAdmin === null) {
+      return null;
+    }
+    return { ...actor, roleIds, isAdmin };
   }
 
   function assertMemberOwner(
@@ -83,6 +145,36 @@ export function createApp(options: AppOptions = {}) {
       return sendError(reply, 403, 'FORBIDDEN', '権限がありません');
     }
     return null;
+  }
+
+  function assertManagePermission(
+    reply: FastifyReply,
+    actor: Actor,
+    settings: GuildSettings,
+  ): FastifyReply | null {
+    if (!actor.userId) {
+      return sendError(reply, 403, 'FORBIDDEN', '権限がありません');
+    }
+    if (actor.isAdmin) {
+      return null;
+    }
+    const manageMode = settings.permissions.manageMode;
+    if (manageMode === 'ADMIN_ONLY') {
+      return sendError(reply, 403, 'FORBIDDEN', '権限がありません');
+    }
+    const allowedRoleIds = settings.permissions.allowedRoleIds;
+    const actorRoleIds = actor.roleIds ?? [];
+    const hasRole = actorRoleIds.some((roleId) => allowedRoleIds.includes(roleId));
+    if (!hasRole) {
+      return sendError(reply, 403, 'FORBIDDEN', '権限がありません');
+    }
+    return null;
+  }
+
+  function sendHeaderValidationError(reply: FastifyReply, message: string) {
+    return sendValidationError(reply, {
+      flatten: () => ({ formErrors: [message], fieldErrors: {} }),
+    });
   }
 
   app.setNotFoundHandler(async (_req, reply) => {
@@ -271,6 +363,229 @@ export function createApp(options: AppOptions = {}) {
       userId: params.data.userId,
     };
     const parsed = GuildMemberSettingsDeleteResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.get('/v1/guilds/:guildId/dictionary', async (req, reply) => {
+    const params = DictionaryListParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const query = DictionaryListQuerySchema.safeParse(req.query);
+    if (!query.success) {
+      return sendValidationError(reply, query.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const actorWithRoles = applyActorRoles(actorHeaders.data, actor);
+    if (!actorWithRoles) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
+
+    const settings = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const forbidden = assertManagePermission(reply, actorWithRoles, settings);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    try {
+      const limit = query.data.limit ?? 50;
+      const result = await dictionaryStore.listByGuild(params.data.guildId, {
+        limit,
+        cursor: query.data.cursor ?? null,
+      });
+      const payload: unknown = {
+        ok: true,
+        guildId: params.data.guildId,
+        items: result.items,
+        nextCursor: result.nextCursor,
+      };
+      const parsed = DictionaryListResponseSchema.safeParse(payload);
+      if (!parsed.success) {
+        return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+      }
+      return reply.status(200).send(parsed.data);
+    } catch (error) {
+      if (error instanceof InvalidCursorError) {
+        return sendHeaderValidationError(reply, 'cursor が不正です');
+      }
+      throw error;
+    }
+  });
+
+  app.post('/v1/guilds/:guildId/dictionary', async (req, reply) => {
+    const params = DictionaryListParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const body = DictionaryEntryBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return sendValidationError(reply, body.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const actorWithRoles = applyActorRoles(actorHeaders.data, actor);
+    if (!actorWithRoles) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
+
+    const settings = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const forbidden = assertManagePermission(reply, actorWithRoles, settings);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    const entry = {
+      id: randomUUID(),
+      guildId: params.data.guildId,
+      surface: body.data.surface,
+      surfaceKey: normalizeSurface(body.data.surface),
+      reading: body.data.reading,
+      priority: body.data.priority,
+      isEnabled: body.data.isEnabled,
+    };
+
+    try {
+      await dictionaryStore.create(params.data.guildId, entry, actorWithRoles);
+    } catch (error) {
+      if (error instanceof DuplicateSurfaceKeyError) {
+        return sendError(reply, 409, 'CONFLICT', '既に同じ表記が登録されています');
+      }
+      throw error;
+    }
+
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      entry,
+    };
+    const parsed = DictionaryEntryResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.put('/v1/guilds/:guildId/dictionary/:entryId', async (req, reply) => {
+    const params = DictionaryEntryParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const body = DictionaryEntryBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return sendValidationError(reply, body.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const actorWithRoles = applyActorRoles(actorHeaders.data, actor);
+    if (!actorWithRoles) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
+
+    const settings = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const forbidden = assertManagePermission(reply, actorWithRoles, settings);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    const entry = {
+      id: params.data.entryId,
+      guildId: params.data.guildId,
+      surface: body.data.surface,
+      surfaceKey: normalizeSurface(body.data.surface),
+      reading: body.data.reading,
+      priority: body.data.priority,
+      isEnabled: body.data.isEnabled,
+    };
+
+    try {
+      await dictionaryStore.replace(
+        params.data.guildId,
+        params.data.entryId,
+        entry,
+        actorWithRoles,
+      );
+    } catch (error) {
+      if (error instanceof DuplicateSurfaceKeyError) {
+        return sendError(reply, 409, 'CONFLICT', '既に同じ表記が登録されています');
+      }
+      if (error instanceof DictionaryEntryNotFoundError) {
+        return sendError(reply, 404, 'NOT_FOUND', '辞書エントリが見つかりません');
+      }
+      throw error;
+    }
+
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      entry,
+    };
+    const parsed = DictionaryEntryResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    return reply.status(200).send(parsed.data);
+  });
+
+  app.delete('/v1/guilds/:guildId/dictionary/:entryId', async (req, reply) => {
+    const params = DictionaryEntryParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      return sendValidationError(reply, params.error);
+    }
+
+    const actorHeaders = ActorHeadersSchema.safeParse(req.headers);
+    if (!actorHeaders.success) {
+      return sendValidationError(reply, actorHeaders.error);
+    }
+
+    const actor = buildActor(actorHeaders.data);
+    const actorWithRoles = applyActorRoles(actorHeaders.data, actor);
+    if (!actorWithRoles) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
+
+    const settings = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const forbidden = assertManagePermission(reply, actorWithRoles, settings);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    try {
+      await dictionaryStore.delete(params.data.guildId, params.data.entryId, actorWithRoles);
+    } catch (error) {
+      if (error instanceof DictionaryEntryNotFoundError) {
+        return sendError(reply, 404, 'NOT_FOUND', '辞書エントリが見つかりません');
+      }
+      throw error;
+    }
+
+    const payload: unknown = {
+      ok: true,
+      guildId: params.data.guildId,
+      entryId: params.data.entryId,
+    };
+    const parsed = DictionaryEntryDeleteResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }

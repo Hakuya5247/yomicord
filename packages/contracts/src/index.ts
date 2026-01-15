@@ -60,6 +60,8 @@ export const ActorHeadersSchema = z
     'x-yomicord-actor-display-name': z.string().min(1).optional(),
     'x-yomicord-actor-source': z.enum(['command', 'api', 'system', 'migration']).optional(),
     'x-yomicord-actor-occurred-at': z.string().min(1).optional(),
+    'x-yomicord-actor-role-ids': z.string().min(1).optional(),
+    'x-yomicord-actor-is-admin': z.enum(['true', 'false']).optional(),
   })
   .passthrough();
 export type ActorHeaders = z.infer<typeof ActorHeadersSchema>;
@@ -193,16 +195,63 @@ export type GuildMemberSettingsDeleteResponse = z.infer<
   typeof GuildMemberSettingsDeleteResponseSchema
 >;
 
+export const DictionaryEntryParamsSchema = z.object({
+  guildId: z.string().min(1),
+  entryId: z.string().min(1),
+});
+export type DictionaryEntryParams = z.infer<typeof DictionaryEntryParamsSchema>;
+
+export const DictionaryListParamsSchema = z.object({
+  guildId: z.string().min(1),
+});
+export type DictionaryListParams = z.infer<typeof DictionaryListParamsSchema>;
+
+export const DictionaryListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  cursor: z.string().min(1).optional(),
+});
+export type DictionaryListQuery = z.infer<typeof DictionaryListQuerySchema>;
+
+export const DictionaryEntryBodySchema = z.object({
+  surface: z.string().min(1),
+  reading: z.string().min(1),
+  priority: z.number().int(),
+  isEnabled: z.boolean(),
+});
+export type DictionaryEntryBody = z.infer<typeof DictionaryEntryBodySchema>;
+
 export const DictionaryEntrySchema = z.object({
   id: z.string(),
   guildId: z.string(),
   surface: z.string(),
   surfaceKey: z.string(),
   reading: z.string(),
-  priority: z.number(),
+  priority: z.number().int(),
   isEnabled: z.boolean(),
 });
 export type DictionaryEntry = z.infer<typeof DictionaryEntrySchema>;
+
+export const DictionaryListResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  items: z.array(DictionaryEntrySchema),
+  nextCursor: z.string().nullable(),
+});
+export type DictionaryListResponse = z.infer<typeof DictionaryListResponseSchema>;
+
+export const DictionaryEntryResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  entry: DictionaryEntrySchema,
+});
+export type DictionaryEntryResponse = z.infer<typeof DictionaryEntryResponseSchema>;
+
+export const DictionaryEntryDeleteResponseSchema = z.object({
+  ok: z.literal(true),
+  guildId: z.string().min(1),
+  entryId: z.string().min(1),
+});
+export type DictionaryEntryDeleteResponse = z.infer<typeof DictionaryEntryDeleteResponseSchema>;
 
 export const SettingsAuditLogSchema = z.object({
   id: z.string(),
@@ -222,6 +271,8 @@ export type SettingsAuditLog = z.infer<typeof SettingsAuditLogSchema>;
 export type Actor = {
   userId: string | null;
   displayName?: string | null;
+  roleIds?: string[];
+  isAdmin?: boolean;
   source: 'command' | 'api' | 'system' | 'migration';
   occurredAt: string;
 };
