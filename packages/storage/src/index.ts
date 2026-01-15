@@ -18,6 +18,26 @@ export class DuplicateSurfaceKeyError extends Error {
   }
 }
 
+export class InvalidCursorError extends Error {
+  readonly cursor: string;
+
+  constructor(cursor: string) {
+    super(`Invalid cursor: ${cursor}`);
+    this.name = 'InvalidCursorError';
+    this.cursor = cursor;
+  }
+}
+
+export class DictionaryEntryNotFoundError extends Error {
+  readonly entryId: string;
+
+  constructor(entryId: string) {
+    super(`Dictionary entry not found: ${entryId}`);
+    this.name = 'DictionaryEntryNotFoundError';
+    this.entryId = entryId;
+  }
+}
+
 export interface GuildSettingsStore {
   /**
    * 指定 guildId の設定を取得。存在しない場合はデフォルト値で新規作成。
@@ -40,7 +60,16 @@ export interface GuildMemberSettingsStore {
 }
 
 export interface DictionaryStore {
-  listByGuild(guildId: string): Promise<DictionaryEntry[]>;
+  listByGuild(
+    guildId: string,
+    options: {
+      limit: number;
+      cursor?: string | null;
+    },
+  ): Promise<{
+    items: DictionaryEntry[];
+    nextCursor: string | null;
+  }>;
 
   /**
    * 辞書エントリを新規作成。
@@ -48,12 +77,7 @@ export interface DictionaryStore {
    */
   create(guildId: string, entry: DictionaryEntry, actor: Actor): Promise<void>;
 
-  update(
-    guildId: string,
-    entryId: string,
-    patch: Partial<Pick<DictionaryEntry, 'reading' | 'priority' | 'isEnabled'>>,
-    actor: Actor,
-  ): Promise<void>;
+  replace(guildId: string, entryId: string, next: DictionaryEntry, actor: Actor): Promise<void>;
 
   delete(guildId: string, entryId: string, actor: Actor): Promise<void>;
 }

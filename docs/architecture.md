@@ -140,6 +140,7 @@ WebUI も同様に apps/api を呼び出す。
   - GET は cursor 方式の pagination/limit 前提で一覧取得する（既定 limit: 50）。
   - cursor は `"{priority}:{surfaceLength}:{id}"` を base64 化した文字列（priority/length は降順）。
   - レスポンスは `items` と `nextCursor` を返す（終端は `nextCursor: null`）。
+  - DictionaryEntry の操作は `X-Yomicord-Actor-User-Id` を必須とする。
   - POST は `guildId + surfaceKey` の重複をエラー扱いとする。
   - PUT は単一エントリの **全置換**（partial update ではない）。
   - DELETE は単一エントリ削除。

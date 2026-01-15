@@ -41,6 +41,9 @@ importers:
       '@yomicord/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@yomicord/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@yomicord/storage-json':
         specifier: workspace:*
         version: link:../../packages/storage-json

@@ -615,7 +615,7 @@ Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）�
 - `:guildId` / `:entryId` は文字列
 - 認可は `permissions.manageMode` に連動し、API 側で判定する
 - Actor ヘッダーは全操作で受け取る（監査・認可のため）
-  - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID（Bot からの操作時は必須、system 操作時は null）
+  - `X-Yomicord-Actor-User-Id`: **必須**（操作者の Discord User ID）
   - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
   - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
   - `X-Yomicord-Actor-Display-Name`: 省略可
@@ -631,11 +631,13 @@ Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）�
 - cursor は `"{priority}:{surfaceLength}:{id}"` を base64 化した文字列
 - Response は `items` と `nextCursor` を返す（終端は `nextCursor: null`）
 - 具体的な query/response schema は packages/contracts を唯一の真実とする
+- 補足: 更新/削除により cursor が無効化された場合は `VALIDATION_FAILED` とする
 
 #### 作成（POST）
 
 - 辞書エントリを新規作成する
 - Body は `{ surface, reading, priority, isEnabled }`（`id` / `guildId` / `surfaceKey` は含めない）
+- `priority` は整数
 - `surfaceKey` は `surface` から API 側で正規化して生成する
 - `guildId + surfaceKey` の重複は `CONFLICT` とする
 
@@ -643,6 +645,7 @@ Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）�
 
 - 単一エントリを **全置換** で更新する（partial update ではない）
 - Body は `{ surface, reading, priority, isEnabled }`（`id` / `guildId` / `surfaceKey` は含めない）
+- `priority` は整数
 - `id` / `guildId` は params を正とし、更新で変更できない
 - `surfaceKey` は `surface` から再計算する
 
@@ -762,12 +765,7 @@ interface DictionaryStore {
   /**
    * 単一エントリを全置換で更新。
    */
-  replace(
-    guildId: string,
-    entryId: string,
-    next: DictionaryEntry,
-    actor: Actor,
-  ): Promise<void>;
+  replace(guildId: string, entryId: string, next: DictionaryEntry, actor: Actor): Promise<void>;
 
   delete(guildId: string, entryId: string, actor: Actor): Promise<void>;
 }
