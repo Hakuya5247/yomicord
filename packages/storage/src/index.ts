@@ -71,6 +71,8 @@ export interface DictionaryStore {
     nextCursor: string | null;
   }>;
 
+  getById(guildId: string, entryId: string): Promise<DictionaryEntry | null>;
+
   /**
    * 辞書エントリを新規作成。
    * @throws DuplicateSurfaceKeyError - guildId + surfaceKey が既に存在する場合

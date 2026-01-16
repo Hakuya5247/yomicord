@@ -325,6 +325,56 @@ normalizeSurface(surface):
 }
 ```
 
+#### 保存ルール（API 側）
+
+- 監査ログは **更新系 API のみ**で保存する（GET/閲覧は対象外）。
+- 監査ログの追記は **同期的**に行い、追記失敗時は **API は成功を返す**（運用で検知・補完する）。
+- 変更が複数ある場合は **変更ごとに 1 ログ**を作成する。
+  - 同一リクエスト内の複数ログは `createdAt` を同一にする。
+  - 同一リクエスト内の複数ログは `entityId` を同一にする。
+  - 並び順は `path` の辞書順で安定化させる。
+  - `path = null` のログは末尾に置く。
+- `before` / `after` は **変更部分のみ**を保持する。
+- 差分抽出は **ネストまで含む深い比較**とし、`path` は `"a.b.c"` の形式で記録する。
+- `createdAt` は `X-Yomicord-Actor-Occurred-At` を優先し、未指定時は API 時刻を使用する。
+
+#### 作成 / 削除時の before / after ルール
+
+- DictionaryEntry:
+  - create: `before = {}` / `after = { surface, surfaceKey, reading, priority, isEnabled }`
+  - delete: `before = { surface, surfaceKey, reading, priority, isEnabled }` / `after = {}`
+- GuildMemberSettings:
+  - create: `before = {}` / `after = { voice?, nameRead? }`
+  - delete: `before = { voice?, nameRead? }` / `after = {}`
+- GuildSettings:
+  - 更新時は差分のみ（複数項目は複数ログ）。
+  - 作成/削除は原則発生しない（必要になった場合は別途定義）。
+
+#### 差分抽出の実装ガイド（API 層）
+
+- 差分検出は **リーフレベル**（最も深い変更箇所）で行う。
+  - 例: `voice.speakerId` が変更なら `path = "voice.speakerId"`
+- 配列の変更は配列全体を before/after に含める。
+  - 例: `allowedRoleIds` 変更なら `path = "permissions.allowedRoleIds"`
+- path のソートは JavaScript の `Array.prototype.sort()` による昇順。
+  - `path = null` は末尾に配置。
+- 差分抽出ヘルパーは packages/contracts に配置する。
+  - `computeGuildSettingsDiff(before, after): Diff[]`
+  - `computeDictionaryEntryDiff(before, after): Diff[]`
+  - `computeGuildMemberSettingsDiff(before, after): Diff[]`
+
+#### GuildMemberSettings の監査ログ詳細
+
+- 新規作成: `action = "create"`, `path = null`, `before = {}`, `after = { 全体 }`
+- 更新: 変更されたフィールドごとに 1 ログ（リーフレベル）
+- 削除: `action = "delete"`, `path = null`, `before = { 全体 }`, `after = {}`
+
+#### DictionaryEntry の監査ログ詳細
+
+- 作成: `action = "create"`, `path = null`, `before = {}`, `after = { 全体 }`
+- 更新: 変更されたフィールドごとに 1 ログ（リーフレベル）
+- 削除: `action = "delete"`, `path = null`, `before = { 全体 }`, `after = {}`
+
 ---
 
 ### 5.5 Enum 定義（共通値）

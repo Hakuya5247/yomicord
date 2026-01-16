@@ -23,12 +23,17 @@ import {
   SettingsAuditLogListParamsSchema,
   SettingsAuditLogListQuerySchema,
   SettingsAuditLogListResponseSchema,
+  computeDictionaryEntryDiff,
+  computeGuildMemberSettingsDiff,
+  computeGuildSettingsDiff,
   normalizeSurface,
   canonicalizeGuildMemberSettings,
+  type AuditLogDiff,
   type Actor,
   type ActorHeaders,
   type ApiErrorCode,
   type GuildSettings,
+  type SettingsAuditLog,
 } from '@yomicord/contracts';
 import {
   DictionaryEntryNotFoundError,
@@ -182,6 +187,68 @@ export function createApp(options: AppOptions = {}) {
     });
   }
 
+  function buildAuditLogBase(
+    actor: Actor,
+    params: {
+      guildId: string;
+      entityType: SettingsAuditLog['entityType'];
+      entityId: SettingsAuditLog['entityId'];
+      action: SettingsAuditLog['action'];
+      path: SettingsAuditLog['path'];
+      before: SettingsAuditLog['before'];
+      after: SettingsAuditLog['after'];
+    },
+  ): SettingsAuditLog {
+    return {
+      id: randomUUID(),
+      guildId: params.guildId,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      action: params.action,
+      path: params.path,
+      before: params.before,
+      after: params.after,
+      actorUserId: actor.userId,
+      source: actor.source,
+      createdAt: actor.occurredAt,
+    };
+  }
+
+  function sortAuditLogDiffs(diffs: AuditLogDiff[]): AuditLogDiff[] {
+    return diffs.slice().sort((a, b) => {
+      if (a.path === b.path) {
+        return 0;
+      }
+      if (a.path === null) {
+        return 1;
+      }
+      if (b.path === null) {
+        return -1;
+      }
+      return a.path < b.path ? -1 : 1;
+    });
+  }
+
+  async function appendAuditLogs(logs: SettingsAuditLog[]): Promise<void> {
+    for (const log of logs) {
+      await auditLogStore.append(log);
+    }
+  }
+
+  function logAuditLogFailure(
+    error: unknown,
+    meta: {
+      guildId: string;
+      entityType: SettingsAuditLog['entityType'];
+      entityId: SettingsAuditLog['entityId'];
+      action: SettingsAuditLog['action'];
+      path: SettingsAuditLog['path'];
+      actorUserId: SettingsAuditLog['actorUserId'];
+    },
+  ) {
+    app.log.error({ err: error, ...meta }, '監査ログの追記に失敗しました');
+  }
+
   app.setNotFoundHandler(async (_req, reply) => {
     return sendError(reply, 404, 'NOT_FOUND', 'エンドポイントが見つかりません');
   });
@@ -252,6 +319,7 @@ export function createApp(options: AppOptions = {}) {
       return sendValidationError(reply, body.error);
     }
 
+    const before = await guildSettingsStore.getOrCreate(params.data.guildId);
     const next: GuildSettings = body.data;
     await guildSettingsStore.update(params.data.guildId, next, actor);
     const payload: unknown = {
@@ -262,6 +330,32 @@ export function createApp(options: AppOptions = {}) {
     const parsed = GuildSettingsPutResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    try {
+      const diffs = computeGuildSettingsDiff(before, next);
+      const logs = sortAuditLogDiffs(diffs).map((diff) =>
+        buildAuditLogBase(actor, {
+          guildId: params.data.guildId,
+          entityType: 'guild_settings',
+          entityId: null,
+          action: 'update',
+          path: diff.path,
+          before: diff.before,
+          after: diff.after,
+        }),
+      );
+      if (logs.length > 0) {
+        await appendAuditLogs(logs);
+      }
+    } catch (error) {
+      logAuditLogFailure(error, {
+        guildId: params.data.guildId,
+        entityType: 'guild_settings',
+        entityId: null,
+        action: 'update',
+        path: null,
+        actorUserId: actor.userId,
+      });
     }
     return reply.status(200).send(parsed.data);
   });
@@ -319,6 +413,7 @@ export function createApp(options: AppOptions = {}) {
       return sendValidationError(reply, body.error);
     }
 
+    const before = await guildMemberSettingsStore.get(params.data.guildId, params.data.userId);
     const canonical = canonicalizeGuildMemberSettings(body.data);
     if (!canonical) {
       await guildMemberSettingsStore.delete(params.data.guildId, params.data.userId, actor);
@@ -341,6 +436,68 @@ export function createApp(options: AppOptions = {}) {
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
+    try {
+      const logs: SettingsAuditLog[] = [];
+      const entityId = `${params.data.guildId}:${params.data.userId}`;
+      if (before === null && canonical !== null) {
+        logs.push(
+          buildAuditLogBase(actor, {
+            guildId: params.data.guildId,
+            entityType: 'guild_member_settings',
+            entityId,
+            action: 'create',
+            path: null,
+            before: {},
+            after: canonical,
+          }),
+        );
+      } else if (before !== null && canonical === null) {
+        logs.push(
+          buildAuditLogBase(actor, {
+            guildId: params.data.guildId,
+            entityType: 'guild_member_settings',
+            entityId,
+            action: 'delete',
+            path: null,
+            before,
+            after: {},
+          }),
+        );
+      } else if (before !== null && canonical !== null) {
+        const diffs = computeGuildMemberSettingsDiff(before, canonical);
+        const sortedDiffs = sortAuditLogDiffs(diffs);
+        for (const diff of sortedDiffs) {
+          logs.push(
+            buildAuditLogBase(actor, {
+              guildId: params.data.guildId,
+              entityType: 'guild_member_settings',
+              entityId,
+              action: 'update',
+              path: diff.path,
+              before: diff.before,
+              after: diff.after,
+            }),
+          );
+        }
+      }
+      if (logs.length > 0) {
+        await appendAuditLogs(logs);
+      }
+    } catch (error) {
+      logAuditLogFailure(error, {
+        guildId: params.data.guildId,
+        entityType: 'guild_member_settings',
+        entityId: `${params.data.guildId}:${params.data.userId}`,
+        action:
+          before === null && canonical !== null
+            ? 'create'
+            : canonical === null
+              ? 'delete'
+              : 'update',
+        path: null,
+        actorUserId: actor.userId,
+      });
+    }
     return reply.status(200).send(parsed.data);
   });
 
@@ -361,6 +518,7 @@ export function createApp(options: AppOptions = {}) {
       return forbidden;
     }
 
+    const before = await guildMemberSettingsStore.get(params.data.guildId, params.data.userId);
     await guildMemberSettingsStore.delete(params.data.guildId, params.data.userId, actor);
     const payload: unknown = {
       ok: true,
@@ -370,6 +528,30 @@ export function createApp(options: AppOptions = {}) {
     const parsed = GuildMemberSettingsDeleteResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    try {
+      if (before !== null) {
+        await appendAuditLogs([
+          buildAuditLogBase(actor, {
+            guildId: params.data.guildId,
+            entityType: 'guild_member_settings',
+            entityId: `${params.data.guildId}:${params.data.userId}`,
+            action: 'delete',
+            path: null,
+            before,
+            after: {},
+          }),
+        ]);
+      }
+    } catch (error) {
+      logAuditLogFailure(error, {
+        guildId: params.data.guildId,
+        entityType: 'guild_member_settings',
+        entityId: `${params.data.guildId}:${params.data.userId}`,
+        action: 'delete',
+        path: null,
+        actorUserId: actor.userId,
+      });
     }
     return reply.status(200).send(parsed.data);
   });
@@ -483,6 +665,35 @@ export function createApp(options: AppOptions = {}) {
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
+    try {
+      const after: Record<string, unknown> = {
+        surface: entry.surface,
+        surfaceKey: entry.surfaceKey,
+        reading: entry.reading,
+        priority: entry.priority,
+        isEnabled: entry.isEnabled,
+      };
+      await appendAuditLogs([
+        buildAuditLogBase(actorWithRoles, {
+          guildId: params.data.guildId,
+          entityType: 'dictionary_entry',
+          entityId: entry.id,
+          action: 'create',
+          path: null,
+          before: {},
+          after,
+        }),
+      ]);
+    } catch (error) {
+      logAuditLogFailure(error, {
+        guildId: params.data.guildId,
+        entityType: 'dictionary_entry',
+        entityId: entry.id,
+        action: 'create',
+        path: null,
+        actorUserId: actorWithRoles.userId,
+      });
+    }
     return reply.status(200).send(parsed.data);
   });
 
@@ -512,6 +723,11 @@ export function createApp(options: AppOptions = {}) {
     const forbidden = assertManagePermission(reply, actorWithRoles, settings);
     if (forbidden) {
       return forbidden;
+    }
+
+    const before = await dictionaryStore.getById(params.data.guildId, params.data.entryId);
+    if (!before) {
+      return sendError(reply, 404, 'NOT_FOUND', '辞書エントリが見つかりません');
     }
 
     const entry = {
@@ -550,6 +766,32 @@ export function createApp(options: AppOptions = {}) {
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
+    try {
+      const diffs = computeDictionaryEntryDiff(before, entry);
+      const logs = sortAuditLogDiffs(diffs).map((diff) =>
+        buildAuditLogBase(actorWithRoles, {
+          guildId: params.data.guildId,
+          entityType: 'dictionary_entry',
+          entityId: params.data.entryId,
+          action: 'update',
+          path: diff.path,
+          before: diff.before,
+          after: diff.after,
+        }),
+      );
+      if (logs.length > 0) {
+        await appendAuditLogs(logs);
+      }
+    } catch (error) {
+      logAuditLogFailure(error, {
+        guildId: params.data.guildId,
+        entityType: 'dictionary_entry',
+        entityId: params.data.entryId,
+        action: 'update',
+        path: null,
+        actorUserId: actorWithRoles.userId,
+      });
+    }
     return reply.status(200).send(parsed.data);
   });
 
@@ -576,6 +818,11 @@ export function createApp(options: AppOptions = {}) {
       return forbidden;
     }
 
+    const before = await dictionaryStore.getById(params.data.guildId, params.data.entryId);
+    if (!before) {
+      return sendError(reply, 404, 'NOT_FOUND', '辞書エントリが見つかりません');
+    }
+
     try {
       await dictionaryStore.delete(params.data.guildId, params.data.entryId, actorWithRoles);
     } catch (error) {
@@ -593,6 +840,35 @@ export function createApp(options: AppOptions = {}) {
     const parsed = DictionaryEntryDeleteResponseSchema.safeParse(payload);
     if (!parsed.success) {
       return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
+    }
+    try {
+      const beforePayload: Record<string, unknown> = {
+        surface: before.surface,
+        surfaceKey: before.surfaceKey,
+        reading: before.reading,
+        priority: before.priority,
+        isEnabled: before.isEnabled,
+      };
+      await appendAuditLogs([
+        buildAuditLogBase(actorWithRoles, {
+          guildId: params.data.guildId,
+          entityType: 'dictionary_entry',
+          entityId: params.data.entryId,
+          action: 'delete',
+          path: null,
+          before: beforePayload,
+          after: {},
+        }),
+      ]);
+    } catch (error) {
+      logAuditLogFailure(error, {
+        guildId: params.data.guildId,
+        entityType: 'dictionary_entry',
+        entityId: params.data.entryId,
+        action: 'delete',
+        path: null,
+        actorUserId: actorWithRoles.userId,
+      });
     }
     return reply.status(200).send(parsed.data);
   });

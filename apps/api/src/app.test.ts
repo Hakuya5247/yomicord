@@ -859,4 +859,394 @@ describe('api: routes', () => {
       }),
     );
   });
+
+  it('PUT /v1/guilds/:guildId/settings は差分ごとに監査ログを残す', async () => {
+    const occurredAt = new Date('2026-01-01T00:00:00.000Z').toISOString();
+    const next = {
+      ...createDefaultGuildSettings(),
+      nameRead: {
+        ...createDefaultGuildSettings().nameRead,
+        prefix: 'てすと',
+      },
+      filters: {
+        ...createDefaultGuildSettings().filters,
+        urlMode: 'FULL',
+      },
+    };
+
+    const updateRes = await app.inject({
+      method: 'PUT',
+      url: '/v1/guilds/123/settings',
+      headers: {
+        'x-yomicord-actor-user-id': '999',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-occurred-at': occurredAt,
+      },
+      payload: next,
+    });
+
+    expect(updateRes.statusCode).toBe(200);
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/v1/guilds/123/audit-logs',
+      headers: {
+        'x-yomicord-actor-user-id': '999',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-is-admin': 'true',
+        'x-yomicord-actor-role-ids': '[]',
+      },
+    });
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json()).toEqual({
+      ok: true,
+      guildId: '123',
+      items: [
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'guild_settings',
+          entityId: null,
+          action: 'update',
+          path: 'filters.urlMode',
+          before: { urlMode: 'DOMAIN_ONLY' },
+          after: { urlMode: 'FULL' },
+          actorUserId: '999',
+          source: 'api',
+          createdAt: occurredAt,
+        },
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'guild_settings',
+          entityId: null,
+          action: 'update',
+          path: 'nameRead.prefix',
+          before: { prefix: '' },
+          after: { prefix: 'てすと' },
+          actorUserId: '999',
+          source: 'api',
+          createdAt: occurredAt,
+        },
+      ],
+    });
+  });
+
+  it('POST /v1/guilds/:guildId/dictionary は作成ログを残す', async () => {
+    const occurredAt = new Date('2026-01-02T00:00:00.000Z').toISOString();
+    const adminHeaders = {
+      'x-yomicord-actor-user-id': '999',
+      'x-yomicord-actor-source': 'api',
+      'x-yomicord-actor-is-admin': 'true',
+      'x-yomicord-actor-role-ids': '[]',
+      'x-yomicord-actor-occurred-at': occurredAt,
+    };
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/v1/guilds/123/dictionary',
+      headers: adminHeaders,
+      payload: {
+        surface: 'API',
+        reading: 'エーピーアイ',
+        priority: 10,
+        isEnabled: true,
+      },
+    });
+
+    expect(createRes.statusCode).toBe(200);
+    const entryId = createRes.json().entry.id as string;
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/v1/guilds/123/audit-logs',
+      headers: adminHeaders,
+    });
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json()).toEqual({
+      ok: true,
+      guildId: '123',
+      items: [
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'dictionary_entry',
+          entityId: entryId,
+          action: 'create',
+          path: null,
+          before: {},
+          after: {
+            surface: 'API',
+            surfaceKey: 'api',
+            reading: 'エーピーアイ',
+            priority: 10,
+            isEnabled: true,
+          },
+          actorUserId: '999',
+          source: 'api',
+          createdAt: occurredAt,
+        },
+      ],
+    });
+  });
+
+  it('PUT/DELETE /v1/guilds/:guildId/members/:userId/settings は create/update/delete を記録する', async () => {
+    const createAt = new Date('2026-01-01T00:00:00.000Z').toISOString();
+    const updateAt = new Date('2026-01-02T00:00:00.000Z').toISOString();
+    const deleteAt = new Date('2026-01-03T00:00:00.000Z').toISOString();
+
+    const createRes = await app.inject({
+      method: 'PUT',
+      url: '/v1/guilds/123/members/456/settings',
+      headers: {
+        'x-yomicord-actor-user-id': '456',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-occurred-at': createAt,
+      },
+      payload: {
+        voice: {
+          speed: 1.1,
+        },
+      },
+    });
+
+    expect(createRes.statusCode).toBe(200);
+
+    const updateRes = await app.inject({
+      method: 'PUT',
+      url: '/v1/guilds/123/members/456/settings',
+      headers: {
+        'x-yomicord-actor-user-id': '456',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-occurred-at': updateAt,
+      },
+      payload: {
+        voice: {
+          speed: 1.2,
+        },
+      },
+    });
+
+    expect(updateRes.statusCode).toBe(200);
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: '/v1/guilds/123/members/456/settings',
+      headers: {
+        'x-yomicord-actor-user-id': '456',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-occurred-at': deleteAt,
+      },
+    });
+
+    expect(deleteRes.statusCode).toBe(200);
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/v1/guilds/123/audit-logs',
+      headers: {
+        'x-yomicord-actor-user-id': '999',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-is-admin': 'true',
+        'x-yomicord-actor-role-ids': '[]',
+      },
+    });
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json()).toEqual({
+      ok: true,
+      guildId: '123',
+      items: [
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'guild_member_settings',
+          entityId: '123:456',
+          action: 'delete',
+          path: null,
+          before: { voice: { speed: 1.2 } },
+          after: {},
+          actorUserId: '456',
+          source: 'api',
+          createdAt: deleteAt,
+        },
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'guild_member_settings',
+          entityId: '123:456',
+          action: 'update',
+          path: 'voice.speed',
+          before: { speed: 1.1 },
+          after: { speed: 1.2 },
+          actorUserId: '456',
+          source: 'api',
+          createdAt: updateAt,
+        },
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'guild_member_settings',
+          entityId: '123:456',
+          action: 'create',
+          path: null,
+          before: {},
+          after: { voice: { speed: 1.1 } },
+          actorUserId: '456',
+          source: 'api',
+          createdAt: createAt,
+        },
+      ],
+    });
+  });
+
+  it('PUT/DELETE /v1/guilds/:guildId/dictionary/:entryId は update/delete を記録する', async () => {
+    const createAt = new Date('2026-01-01T00:00:00.000Z').toISOString();
+    const updateAt = new Date('2026-01-02T00:00:00.000Z').toISOString();
+    const deleteAt = new Date('2026-01-03T00:00:00.000Z').toISOString();
+    const adminHeaders = {
+      'x-yomicord-actor-user-id': '999',
+      'x-yomicord-actor-source': 'api',
+      'x-yomicord-actor-is-admin': 'true',
+      'x-yomicord-actor-role-ids': '[]',
+    };
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/v1/guilds/123/dictionary',
+      headers: { ...adminHeaders, 'x-yomicord-actor-occurred-at': createAt },
+      payload: {
+        surface: 'API',
+        reading: 'エーピーアイ',
+        priority: 10,
+        isEnabled: true,
+      },
+    });
+
+    expect(createRes.statusCode).toBe(200);
+    const entryId = createRes.json().entry.id as string;
+
+    const updateRes = await app.inject({
+      method: 'PUT',
+      url: `/v1/guilds/123/dictionary/${entryId}`,
+      headers: { ...adminHeaders, 'x-yomicord-actor-occurred-at': updateAt },
+      payload: {
+        surface: 'API',
+        reading: 'えーぴーあい',
+        priority: 10,
+        isEnabled: true,
+      },
+    });
+
+    expect(updateRes.statusCode).toBe(200);
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: `/v1/guilds/123/dictionary/${entryId}`,
+      headers: { ...adminHeaders, 'x-yomicord-actor-occurred-at': deleteAt },
+    });
+
+    expect(deleteRes.statusCode).toBe(200);
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/v1/guilds/123/audit-logs',
+      headers: adminHeaders,
+    });
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json()).toEqual({
+      ok: true,
+      guildId: '123',
+      items: [
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'dictionary_entry',
+          entityId: entryId,
+          action: 'delete',
+          path: null,
+          before: {
+            surface: 'API',
+            surfaceKey: 'api',
+            reading: 'えーぴーあい',
+            priority: 10,
+            isEnabled: true,
+          },
+          after: {},
+          actorUserId: '999',
+          source: 'api',
+          createdAt: deleteAt,
+        },
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'dictionary_entry',
+          entityId: entryId,
+          action: 'update',
+          path: 'reading',
+          before: { reading: 'エーピーアイ' },
+          after: { reading: 'えーぴーあい' },
+          actorUserId: '999',
+          source: 'api',
+          createdAt: updateAt,
+        },
+        {
+          id: expect.any(String),
+          guildId: '123',
+          entityType: 'dictionary_entry',
+          entityId: entryId,
+          action: 'create',
+          path: null,
+          before: {},
+          after: {
+            surface: 'API',
+            surfaceKey: 'api',
+            reading: 'エーピーアイ',
+            priority: 10,
+            isEnabled: true,
+          },
+          actorUserId: '999',
+          source: 'api',
+          createdAt: createAt,
+        },
+      ],
+    });
+  });
+
+  it('PUT /v1/guilds/:guildId/settings は差分なしなら監査ログを残さない', async () => {
+    const occurredAt = new Date('2026-01-01T00:00:00.000Z').toISOString();
+
+    const updateRes = await app.inject({
+      method: 'PUT',
+      url: '/v1/guilds/123/settings',
+      headers: {
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-occurred-at': occurredAt,
+      },
+      payload: createDefaultGuildSettings(),
+    });
+
+    expect(updateRes.statusCode).toBe(200);
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/v1/guilds/123/audit-logs',
+      headers: {
+        'x-yomicord-actor-user-id': '999',
+        'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-is-admin': 'true',
+        'x-yomicord-actor-role-ids': '[]',
+      },
+    });
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json()).toEqual({
+      ok: true,
+      guildId: '123',
+      items: [],
+    });
+  });
 });
