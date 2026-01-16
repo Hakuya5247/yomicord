@@ -19,9 +19,12 @@
   - PUT: GuildSettings 全体を全置換で更新する。
 - Actor 情報は `X-Yomicord-Actor-*` のカスタムヘッダーで受け取る。
   - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID（Bot からの操作時は必須、system 操作時は null）
+  - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要）
+  - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
   - `X-Yomicord-Actor-Source`: 操作元（`command` / `api` / `system` / `migration`、省略時は `system`）
   - `X-Yomicord-Actor-Occurred-At`: 操作日時（ISO 8601、省略時は API サーバー時刻）
   - ※ DisplayName は永続化せず、監査ログ表示時に Discord API から取得
+- 認可は `permissions.manageMode` に連動し、API 側で判定する。
 - API 入出力の schema は packages/contracts を唯一の真実とする。
 
 ## Consequences

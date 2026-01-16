@@ -58,7 +58,10 @@ describe('api: routes', () => {
       method: 'PUT',
       url: '/v1/guilds/123/settings',
       headers: {
+        'x-yomicord-actor-user-id': '999',
         'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-is-admin': 'true',
+        'x-yomicord-actor-role-ids': '[]',
         'x-yomicord-actor-occurred-at': new Date('2025-01-01T00:00:00.000Z').toISOString(),
       },
       payload: updated,
@@ -82,6 +85,29 @@ describe('api: routes', () => {
       guildId: '123',
       settings: updated,
     });
+  });
+
+  it('PUT /v1/guilds/:guildId/settings は権限ヘッダー不足なら拒否される', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/v1/guilds/123/settings',
+      headers: {
+        'x-yomicord-actor-user-id': '999',
+        'x-yomicord-actor-source': 'api',
+      },
+      payload: createDefaultGuildSettings(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: '権限がありません',
+        },
+      }),
+    );
   });
 
   it('GET /v1/guilds/:guildId/members/:userId/settings は null を返す', async () => {
@@ -880,6 +906,8 @@ describe('api: routes', () => {
       headers: {
         'x-yomicord-actor-user-id': '999',
         'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-is-admin': 'true',
+        'x-yomicord-actor-role-ids': '[]',
         'x-yomicord-actor-occurred-at': occurredAt,
       },
       payload: next,
@@ -1223,7 +1251,10 @@ describe('api: routes', () => {
       method: 'PUT',
       url: '/v1/guilds/123/settings',
       headers: {
+        'x-yomicord-actor-user-id': '999',
         'x-yomicord-actor-source': 'api',
+        'x-yomicord-actor-is-admin': 'true',
+        'x-yomicord-actor-role-ids': '[]',
         'x-yomicord-actor-occurred-at': occurredAt,
       },
       payload: createDefaultGuildSettings(),
