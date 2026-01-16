@@ -356,7 +356,6 @@ export function createApp(options: AppOptions = {}) {
         path: null,
         actorUserId: actor.userId,
       });
-      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
     return reply.status(200).send(parsed.data);
   });
@@ -498,7 +497,6 @@ export function createApp(options: AppOptions = {}) {
         path: null,
         actorUserId: actor.userId,
       });
-      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
     return reply.status(200).send(parsed.data);
   });
@@ -554,7 +552,6 @@ export function createApp(options: AppOptions = {}) {
         path: null,
         actorUserId: actor.userId,
       });
-      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
     return reply.status(200).send(parsed.data);
   });
@@ -696,7 +693,6 @@ export function createApp(options: AppOptions = {}) {
         path: null,
         actorUserId: actorWithRoles.userId,
       });
-      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
     return reply.status(200).send(parsed.data);
   });
@@ -795,7 +791,6 @@ export function createApp(options: AppOptions = {}) {
         path: null,
         actorUserId: actorWithRoles.userId,
       });
-      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
     return reply.status(200).send(parsed.data);
   });
@@ -874,7 +869,6 @@ export function createApp(options: AppOptions = {}) {
         path: null,
         actorUserId: actorWithRoles.userId,
       });
-      return sendError(reply, 500, 'INTERNAL', 'サーバー内部でエラーが発生しました');
     }
     return reply.status(200).send(parsed.data);
   });
