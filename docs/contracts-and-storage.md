@@ -564,7 +564,7 @@ Bot/WebUI から共通で利用する API の最小設計（GuildSettings）。
 
 - Body: `GuildSettings`（全置換）
 - 認可は `permissions.manageMode` に連動し、API 側で判定する
-- Actor ヘッダー（認可のため実質必須）
+- Actor ヘッダー（認可のため必須）
   - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID
   - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
   - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
@@ -668,13 +668,14 @@ Bot/WebUI から共通で利用する API の最小設計（DictionaryEntry）�
 - パス（単一更新/削除）: `/v1/guilds/:guildId/dictionary/:entryId`
 - `:guildId` / `:entryId` は文字列
 - 認可は `permissions.manageMode` に連動し、API 側で判定する
-- Actor ヘッダーは全操作で受け取る（監査・認可のため）
+- Actor ヘッダーは全操作で必須（監査・認可のため）
   - `X-Yomicord-Actor-User-Id`: **必須**（操作者の Discord User ID）
   - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
   - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
   - `X-Yomicord-Actor-Display-Name`: 省略可
   - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
   - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
+  - 未指定の場合は「権限不足」として扱う（403）
 
 #### 一覧取得（GET）
 
@@ -724,13 +725,14 @@ Bot/WebUI から共通で利用する API の最小設計（SettingsAuditLog）�
 - `:guildId` は文字列（Discord の guildId）
 - 取得専用（読み取りのみ、更新/削除 API は提供しない）
 - 認可は `permissions.manageMode` に連動し、API 側で判定する
-- Actor ヘッダーは全操作で受け取る（監査・認可のため）
+- Actor ヘッダーは全操作で必須（監査・認可のため）
   - `X-Yomicord-Actor-User-Id`: **必須**（操作者の Discord User ID）
   - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
   - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
   - `X-Yomicord-Actor-Display-Name`: 省略可
   - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
   - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
+  - 未指定の場合は「権限不足」として扱う（403）
 
 #### 一覧取得（GET）
 
@@ -776,6 +778,8 @@ Actor は **永続化しない入力情報**。
 ```ts
 export type Actor = {
   userId: string | null;
+  roleIds: string[];
+  isAdmin: boolean;
   displayName?: string | null;
   source: 'command' | 'api' | 'system' | 'migration';
   occurredAt: string;
