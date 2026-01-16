@@ -314,6 +314,15 @@ export class JsonDictionaryStore implements DictionaryStore {
     });
   }
 
+  async getById(guildId: string, entryId: string): Promise<DictionaryEntry | null> {
+    const filePath = dataPaths.dictionary(this.dataDir, guildId);
+    return this.mutex.runExclusive(filePath, async () => {
+      const entries = await this.readEntries(filePath);
+      const found = entries.find((item) => item.id === entryId);
+      return found ?? null;
+    });
+  }
+
   async create(guildId: string, entry: DictionaryEntry, _actor: Actor): Promise<void> {
     const filePath = dataPaths.dictionary(this.dataDir, guildId);
     await this.mutex.runExclusive(filePath, async () => {
@@ -395,7 +404,12 @@ export class JsonAuditLogStore implements AuditLogStore {
       }
       const logs = raw
         .map((line) => SettingsAuditLogSchema.parse(line))
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+        .sort((a, b) => {
+          if (a.createdAt === b.createdAt) {
+            return 0;
+          }
+          return a.createdAt < b.createdAt ? 1 : -1;
+        });
       return logs.slice(0, limit);
     });
   }
