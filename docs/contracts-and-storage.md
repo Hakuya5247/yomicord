@@ -563,8 +563,12 @@ Bot/WebUI から共通で利用する API の最小設計（GuildSettings）。
 #### 更新（PUT / 全置換）
 
 - Body: `GuildSettings`（全置換）
-- Actor ヘッダー（任意。ただし Bot 操作時は `User-Id` が必須）
-  - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID（Bot からの操作時は必須、system 操作時は null）
+- 認可は `permissions.manageMode` に連動し、API 側で判定する
+- Actor ヘッダー（認可のため実質必須）
+  - `X-Yomicord-Actor-User-Id`: 操作者の Discord User ID
+  - `X-Yomicord-Actor-Role-Ids`: JSON 配列文字列（URL エンコード不要 / 例: `["role1","role2"]`）
+  - `X-Yomicord-Actor-Is-Admin`: `"true"` / `"false"` の文字列
+  - 未指定の場合は「権限不足」として扱う（403）
   - `X-Yomicord-Actor-Source`: `command | api | system | migration`（省略時は `system`）
   - `X-Yomicord-Actor-Occurred-At`: ISO8601 文字列（省略時は API サーバー時刻）
   - `X-Yomicord-Actor-Display-Name`: 省略可

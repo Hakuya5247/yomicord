@@ -313,6 +313,10 @@ export function createApp(options: AppOptions = {}) {
     }
 
     const actor = buildActor(actorHeaders.data);
+    const actorWithRoles = applyActorRoles(actorHeaders.data, actor);
+    if (!actorWithRoles) {
+      return sendHeaderValidationError(reply, 'Actor ヘッダーが不正です');
+    }
 
     const body = GuildSettingsPutBodySchema.safeParse(req.body);
     if (!body.success) {
@@ -320,8 +324,12 @@ export function createApp(options: AppOptions = {}) {
     }
 
     const before = await guildSettingsStore.getOrCreate(params.data.guildId);
+    const forbidden = assertManagePermission(reply, actorWithRoles, before);
+    if (forbidden) {
+      return forbidden;
+    }
     const next: GuildSettings = body.data;
-    await guildSettingsStore.update(params.data.guildId, next, actor);
+    await guildSettingsStore.update(params.data.guildId, next, actorWithRoles);
     const payload: unknown = {
       ok: true,
       guildId: params.data.guildId,
@@ -334,7 +342,7 @@ export function createApp(options: AppOptions = {}) {
     try {
       const diffs = computeGuildSettingsDiff(before, next);
       const logs = sortAuditLogDiffs(diffs).map((diff) =>
-        buildAuditLogBase(actor, {
+        buildAuditLogBase(actorWithRoles, {
           guildId: params.data.guildId,
           entityType: 'guild_settings',
           entityId: null,
@@ -354,7 +362,7 @@ export function createApp(options: AppOptions = {}) {
         entityId: null,
         action: 'update',
         path: null,
-        actorUserId: actor.userId,
+        actorUserId: actorWithRoles.userId,
       });
     }
     return reply.status(200).send(parsed.data);
