@@ -8,6 +8,11 @@ import {
 
 import type { AppHelpers, AppStores } from '../internal/deps.js';
 
+/**
+ * 監査ログの API ルートを登録する。
+ * @param app - Fastify インスタンス。
+ * @param deps - 依存するストアとヘルパー。
+ */
 export function registerAuditLogRoutes(
   app: FastifyInstance,
   deps: { stores: AppStores; helpers: AppHelpers },

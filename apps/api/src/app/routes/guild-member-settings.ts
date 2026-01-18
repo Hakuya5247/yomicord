@@ -15,6 +15,11 @@ import {
 
 import type { AppHelpers, AppStores } from '../internal/deps.js';
 
+/**
+ * ギルドメンバー設定の API ルートを登録する。
+ * @param app - Fastify インスタンス。
+ * @param deps - 依存するストアとヘルパー。
+ */
 export function registerGuildMemberSettingsRoutes(
   app: FastifyInstance,
   deps: { stores: AppStores; helpers: AppHelpers },

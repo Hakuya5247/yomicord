@@ -20,6 +20,11 @@ import {
 
 import type { AppHelpers, AppStores } from '../internal/deps.js';
 
+/**
+ * 辞書機能の API ルートを登録する。
+ * @param app - Fastify インスタンス。
+ * @param deps - 依存するストアとヘルパー。
+ */
 export function registerDictionaryRoutes(
   app: FastifyInstance,
   deps: { stores: AppStores; helpers: AppHelpers },
