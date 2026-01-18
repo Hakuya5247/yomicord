@@ -1,5 +1,10 @@
 import { GuildMemberSettingsSchema, type GuildMemberSettings } from '../guild/member-settings.js';
 
+/**
+ * メンバー設定を保存用に正規化する。
+ * @param settings - 入力された設定。
+ * @returns 空の場合は null、そうでなければ正規化済み設定。
+ */
 export const canonicalizeGuildMemberSettings = (
   settings: GuildMemberSettings,
 ): GuildMemberSettings | null => {

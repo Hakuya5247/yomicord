@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 // ---- API headers (Actor) ----
 // なぜ: 更新操作の監査・認可に必要な最小情報を headers で共通化する。
+/**
+ * Actor 情報を含むヘッダー schema。
+ */
 export const ActorHeadersSchema = z
   .object({
     'x-yomicord-actor-user-id': z.string().min(1).optional(),
