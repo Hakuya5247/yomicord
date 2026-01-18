@@ -98,6 +98,7 @@ PR / push 時に GitHub Actions で `pnpm -r build` を実行します（workflo
 - アーキテクチャ: `docs/architecture.md`
 - Contracts 設計: `docs/contracts/index.md`
 - Storage 設計: `docs/storage/overview.md`
+- テスト: `docs/testing/index.md`
 
 ## 開発コンテナ補足
 
