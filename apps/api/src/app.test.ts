@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createDefaultGuildSettings } from '@yomicord/contracts';
+import { createDefaultGuildSettings } from '@yomicord/contracts/internal';
 
 import { createApp } from './app.js';
 

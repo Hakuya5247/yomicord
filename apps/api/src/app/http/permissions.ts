@@ -1,5 +1,6 @@
 import type { FastifyReply } from 'fastify';
-import type { Actor, GuildSettings } from '@yomicord/contracts';
+import type { Actor } from '@yomicord/contracts/internal';
+import type { GuildSettings } from '@yomicord/contracts';
 
 import type { SendError } from './errors.js';
 

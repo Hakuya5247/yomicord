@@ -1,13 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  canonicalizeGuildMemberSettings,
+  computeGuildMemberSettingsDiff,
+} from '@yomicord/contracts/internal';
+import {
   ActorHeadersSchema,
   GuildMemberSettingsDeleteResponseSchema,
   GuildMemberSettingsGetResponseSchema,
   GuildMemberSettingsParamsSchema,
   GuildMemberSettingsPutBodySchema,
   GuildMemberSettingsPutResponseSchema,
-  computeGuildMemberSettingsDiff,
-  canonicalizeGuildMemberSettings,
   type SettingsAuditLog,
 } from '@yomicord/contracts';
 

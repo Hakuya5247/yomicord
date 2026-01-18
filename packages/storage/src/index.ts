@@ -1,5 +1,5 @@
+import type { Actor } from '@yomicord/contracts/internal';
 import type {
-  Actor,
   DictionaryEntry,
   GuildMemberSettings,
   GuildSettings,

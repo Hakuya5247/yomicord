@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
+import { computeDictionaryEntryDiff, normalizeSurface } from '@yomicord/contracts/internal';
 import {
   ActorHeadersSchema,
   DictionaryEntryBodySchema,
@@ -10,8 +11,6 @@ import {
   DictionaryListParamsSchema,
   DictionaryListQuerySchema,
   DictionaryListResponseSchema,
-  computeDictionaryEntryDiff,
-  normalizeSurface,
 } from '@yomicord/contracts';
 import {
   DictionaryEntryNotFoundError,

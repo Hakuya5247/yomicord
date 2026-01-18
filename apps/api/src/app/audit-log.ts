@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyBaseLogger } from 'fastify';
-import type { AuditLogDiff, Actor, SettingsAuditLog } from '@yomicord/contracts';
+import type { AuditLogDiff, Actor } from '@yomicord/contracts/internal';
+import type { SettingsAuditLog } from '@yomicord/contracts';
 import type { JsonAuditLogStore } from '@yomicord/storage-json';
 
 export type AuditLogHelpers = {
