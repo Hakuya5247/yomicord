@@ -16,7 +16,7 @@
 - 認可に必要な Actor は `X-Yomicord-Actor-*` ヘッダーで受け取る。
   - `User-Id` / `Role-Ids` / `Is-Admin` を必須とし、その他は任意とする。
 - 作成・更新・削除 API は提供しない（監査ログは API 内部でのみ追記する）。
-- 具体的な入出力の詳細は `docs/contracts-and-storage.md` の該当節を正とする。
+- 具体的な入出力の詳細は `docs/contracts/api-v1.md` の該当節を正とする。
 
 ## Consequences
 
