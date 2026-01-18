@@ -54,6 +54,14 @@ yomicord/
 - 監査ログ（変更履歴、必要なら誰が変更したか）
 - 変更通知（将来的にキャッシュ更新や bot への通知が必要なら検討）
 
+構成（apps/api 内）：
+
+- `src/app.ts` は配線のみ（Fastify 初期化・ストア生成・ヘルパー生成・ルート登録）
+- ルート定義は `src/app/routes/` に機能単位で分割
+- HTTP 境界の共通処理（エラー整形・Actor 解析・認可）は `src/app/http/` に集約
+- 監査ログの横断処理は `src/app/audit-log.ts` に集約
+- 依存注入用の型（`AppStores` / `AppHelpers`）は `src/app/internal/` に置き外部公開を避ける
+
 非責務：
 
 - Discord のイベント処理やコマンド UX（apps/bot）
