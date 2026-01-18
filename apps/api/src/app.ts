@@ -25,6 +25,11 @@ type AppOptions = {
   dataDir?: string;
 };
 
+/**
+ * API アプリを生成する。
+ * @param options.dataDir - JSON ストアの保存先。未指定なら環境変数/デフォルトを使う。
+ * @returns Fastify アプリ。
+ */
 export function createApp(options: AppOptions = {}) {
   // なぜ: API は入力検証・エラー整形・永続化（将来）を担う単一の更新窓口。
   // 注意: Bot/Web は DB に触れず、必ずこの API を経由する。

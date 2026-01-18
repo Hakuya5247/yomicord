@@ -4,6 +4,9 @@ import type { GuildSettings } from '@yomicord/contracts';
 
 import type { SendError } from './errors.js';
 
+/**
+ * 権限判定に関するヘルパー群の契約。
+ */
 export type PermissionHelpers = {
   assertMemberOwner: (reply: FastifyReply, actor: Actor, userId: string) => FastifyReply | null;
   assertManagePermission: (
@@ -13,7 +16,19 @@ export type PermissionHelpers = {
   ) => FastifyReply | null;
 };
 
+/**
+ * 権限判定のヘルパーを生成する。
+ * @param sendError - エラー応答を返す関数。
+ * @returns 権限判定ヘルパー。
+ */
 export function createPermissionHelpers(sendError: SendError): PermissionHelpers {
+  /**
+   * 対象ユーザー本人かどうかを検証する。
+   * @param reply - Fastify の返信オブジェクト。
+   * @param actor - 操作主体。
+   * @param userId - 対象ユーザー ID。
+   * @returns エラー応答または null。
+   */
   function assertMemberOwner(
     reply: FastifyReply,
     actor: Actor,
@@ -25,6 +40,13 @@ export function createPermissionHelpers(sendError: SendError): PermissionHelpers
     return null;
   }
 
+  /**
+   * ギルド管理権限があるか検証する。
+   * @param reply - Fastify の返信オブジェクト。
+   * @param actor - 操作主体。
+   * @param settings - ギルド設定。
+   * @returns エラー応答または null。
+   */
   function assertManagePermission(
     reply: FastifyReply,
     actor: Actor,

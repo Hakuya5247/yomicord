@@ -30,9 +30,20 @@ import {
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
+/**
+ * プレーンなオブジェクトかどうかを判定する。
+ * @param value - 判定対象。
+ * @returns プレーンオブジェクトなら true。
+ */
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+/**
+ * 既存値にデフォルト値をマージする。
+ * @param value - 保存済みの値。
+ * @param defaults - デフォルト値。
+ * @returns デフォルト値で補完された値。
+ */
 const mergeWithDefaults = <T>(value: unknown, defaults: T): T => {
   if (value === undefined || value === null) {
     return defaults;
@@ -63,9 +74,18 @@ const mergeWithDefaults = <T>(value: unknown, defaults: T): T => {
   return result as T;
 };
 
+/**
+ * パスごとの排他処理を直列化する簡易ミューテックス。
+ */
 class MutexMap {
   private tails = new Map<string, Promise<void>>();
 
+  /**
+   * 同じ key の処理を直列化して実行する。
+   * @param key - 排他対象のキー。
+   * @param fn - 実行する処理。
+   * @returns fn の結果。
+   */
   async runExclusive<T>(key: string, fn: () => Promise<T>): Promise<T> {
     const tail = this.tails.get(key) ?? Promise.resolve();
     let release: () => void = () => {};
@@ -86,6 +106,11 @@ class MutexMap {
   }
 }
 
+/**
+ * JSON ファイルを読み込む。存在しない場合は null を返す。
+ * @param filePath - 対象ファイルパス。
+ * @returns JSON の値または null。
+ */
 const readJsonFile = async (filePath: string): Promise<JsonValue | null> => {
   try {
     const text = await fs.readFile(filePath, 'utf8');
@@ -98,6 +123,11 @@ const readJsonFile = async (filePath: string): Promise<JsonValue | null> => {
   }
 };
 
+/**
+ * JSON を一時ファイル経由で安全に書き込む。
+ * @param filePath - 書き込み先パス。
+ * @param data - 保存する JSON 値。
+ */
 const writeJsonAtomic = async (filePath: string, data: JsonValue): Promise<void> => {
   const dirPath = path.dirname(filePath);
   await fs.mkdir(dirPath, { recursive: true });
@@ -107,6 +137,10 @@ const writeJsonAtomic = async (filePath: string, data: JsonValue): Promise<void>
   await fs.rename(tmpPath, filePath);
 };
 
+/**
+ * ファイルが存在すれば削除する。
+ * @param filePath - 対象ファイルパス。
+ */
 const deleteFileIfExists = async (filePath: string): Promise<void> => {
   try {
     await fs.unlink(filePath);
@@ -118,6 +152,11 @@ const deleteFileIfExists = async (filePath: string): Promise<void> => {
   }
 };
 
+/**
+ * JSON Lines 形式を読み込む。存在しない場合は null を返す。
+ * @param filePath - 対象ファイルパス。
+ * @returns 行ごとの JSON 配列または null。
+ */
 const readJsonLines = async (filePath: string): Promise<unknown[] | null> => {
   try {
     const text = (await fs.readFile(filePath, 'utf8')) as string;
@@ -141,14 +180,24 @@ const dataPaths = {
   audit: (dataDir: string, guildId: string) => path.join(dataDir, 'audit', `${guildId}.log.jsonl`),
 };
 
+/**
+ * JSON ファイルでギルド設定を管理するストア。
+ */
 export class JsonGuildSettingsStore implements GuildSettingsStore {
   private readonly dataDir: string;
   private readonly mutex = new MutexMap();
 
+  /**
+   * @param dataDir - JSON の保存先ディレクトリ。
+   */
   constructor(dataDir: string) {
     this.dataDir = dataDir;
   }
 
+  /**
+   * ギルド設定を取得または初期化する。
+   * @param guildId - ギルド ID。
+   */
   async getOrCreate(guildId: string): Promise<GuildSettings> {
     const filePath = dataPaths.guildSettings(this.dataDir, guildId);
     return this.mutex.runExclusive(filePath, async () => {
@@ -166,6 +215,12 @@ export class JsonGuildSettingsStore implements GuildSettingsStore {
     });
   }
 
+  /**
+   * ギルド設定を更新する。
+   * @param guildId - ギルド ID。
+   * @param next - 更新後の設定。
+   * @param _actor - 操作主体（現状は未使用）。
+   */
   async update(guildId: string, next: GuildSettings, _actor: Actor): Promise<void> {
     const filePath = dataPaths.guildSettings(this.dataDir, guildId);
     await this.mutex.runExclusive(filePath, async () => {
@@ -176,14 +231,25 @@ export class JsonGuildSettingsStore implements GuildSettingsStore {
   }
 }
 
+/**
+ * JSON ファイルでギルドメンバー設定を管理するストア。
+ */
 export class JsonGuildMemberSettingsStore implements GuildMemberSettingsStore {
   private readonly dataDir: string;
   private readonly mutex = new MutexMap();
 
+  /**
+   * @param dataDir - JSON の保存先ディレクトリ。
+   */
   constructor(dataDir: string) {
     this.dataDir = dataDir;
   }
 
+  /**
+   * メンバー設定を取得する。
+   * @param guildId - ギルド ID。
+   * @param userId - ユーザー ID。
+   */
   async get(guildId: string, userId: string): Promise<GuildMemberSettings | null> {
     const filePath = dataPaths.guildMemberSettings(this.dataDir, guildId, userId);
     return this.mutex.runExclusive(filePath, async () => {
@@ -195,6 +261,13 @@ export class JsonGuildMemberSettingsStore implements GuildMemberSettingsStore {
     });
   }
 
+  /**
+   * メンバー設定を作成または更新する。
+   * @param guildId - ギルド ID。
+   * @param userId - ユーザー ID。
+   * @param partial - 部分設定。
+   * @param _actor - 操作主体（現状は未使用）。
+   */
   async upsert(
     guildId: string,
     userId: string,
@@ -214,6 +287,12 @@ export class JsonGuildMemberSettingsStore implements GuildMemberSettingsStore {
     });
   }
 
+  /**
+   * メンバー設定を削除する。
+   * @param guildId - ギルド ID。
+   * @param userId - ユーザー ID。
+   * @param _actor - 操作主体（現状は未使用）。
+   */
   async delete(guildId: string, userId: string, _actor: Actor): Promise<void> {
     const filePath = dataPaths.guildMemberSettings(this.dataDir, guildId, userId);
     await this.mutex.runExclusive(filePath, async () => {
@@ -223,19 +302,35 @@ export class JsonGuildMemberSettingsStore implements GuildMemberSettingsStore {
   }
 }
 
+/**
+ * JSON ファイルで辞書エントリを管理するストア。
+ */
 export class JsonDictionaryStore implements DictionaryStore {
   private readonly dataDir: string;
   private readonly mutex = new MutexMap();
 
+  /**
+   * @param dataDir - JSON の保存先ディレクトリ。
+   */
   constructor(dataDir: string) {
     this.dataDir = dataDir;
   }
 
+  /**
+   * ページング用カーソルを生成する。
+   * @param entry - 対象エントリ。
+   */
   private static buildCursor(entry: DictionaryEntry): string {
     const raw = `${entry.priority}:${entry.surface.length}:${entry.id}`;
     return Buffer.from(raw, 'utf8').toString('base64');
   }
 
+  /**
+   * カーソル文字列を解析する。
+   * @param cursor - カーソル文字列。
+   * @returns 解析結果。
+   * @throws InvalidCursorError - 形式が不正な場合。
+   */
   private static parseCursor(cursor: string): {
     priority: number;
     surfaceLength: number;
@@ -258,6 +353,12 @@ export class JsonDictionaryStore implements DictionaryStore {
     }
   }
 
+  /**
+   * 辞書エントリのソート順を比較する。
+   * @param a - 比較対象 A。
+   * @param b - 比較対象 B。
+   * @returns 並び順。
+   */
   private static compareEntries(a: DictionaryEntry, b: DictionaryEntry): number {
     if (a.priority !== b.priority) {
       return b.priority - a.priority;
@@ -276,6 +377,10 @@ export class JsonDictionaryStore implements DictionaryStore {
     return 0;
   }
 
+  /**
+   * 辞書エントリの一覧を読み込む。
+   * @param filePath - 対象ファイルパス。
+   */
   private async readEntries(filePath: string): Promise<DictionaryEntry[]> {
     const raw = await readJsonFile(filePath);
     if (raw === null) {
@@ -316,6 +421,11 @@ export class JsonDictionaryStore implements DictionaryStore {
     });
   }
 
+  /**
+   * 辞書エントリを取得する。
+   * @param guildId - ギルド ID。
+   * @param entryId - エントリ ID。
+   */
   async getById(guildId: string, entryId: string): Promise<DictionaryEntry | null> {
     const filePath = dataPaths.dictionary(this.dataDir, guildId);
     return this.mutex.runExclusive(filePath, async () => {
@@ -325,6 +435,13 @@ export class JsonDictionaryStore implements DictionaryStore {
     });
   }
 
+  /**
+   * 辞書エントリを作成する。
+   * @param guildId - ギルド ID。
+   * @param entry - エントリ。
+   * @param _actor - 操作主体（現状は未使用）。
+   * @throws DuplicateSurfaceKeyError - surfaceKey が重複している場合。
+   */
   async create(guildId: string, entry: DictionaryEntry, _actor: Actor): Promise<void> {
     const filePath = dataPaths.dictionary(this.dataDir, guildId);
     await this.mutex.runExclusive(filePath, async () => {
@@ -364,6 +481,13 @@ export class JsonDictionaryStore implements DictionaryStore {
     });
   }
 
+  /**
+   * 辞書エントリを削除する。
+   * @param guildId - ギルド ID。
+   * @param entryId - エントリ ID。
+   * @param _actor - 操作主体（現状は未使用）。
+   * @throws DictionaryEntryNotFoundError - エントリが存在しない場合。
+   */
   async delete(guildId: string, entryId: string, _actor: Actor): Promise<void> {
     const filePath = dataPaths.dictionary(this.dataDir, guildId);
     await this.mutex.runExclusive(filePath, async () => {
@@ -378,14 +502,24 @@ export class JsonDictionaryStore implements DictionaryStore {
   }
 }
 
+/**
+ * JSON Lines で監査ログを管理するストア。
+ */
 export class JsonAuditLogStore implements AuditLogStore {
   private readonly dataDir: string;
   private readonly mutex = new MutexMap();
 
+  /**
+   * @param dataDir - JSON の保存先ディレクトリ。
+   */
   constructor(dataDir: string) {
     this.dataDir = dataDir;
   }
 
+  /**
+   * 監査ログを追記する。
+   * @param log - 監査ログ。
+   */
   async append(log: SettingsAuditLog): Promise<void> {
     const filePath = dataPaths.audit(this.dataDir, log.guildId);
     await this.mutex.runExclusive(filePath, async () => {
@@ -396,6 +530,11 @@ export class JsonAuditLogStore implements AuditLogStore {
     });
   }
 
+  /**
+   * 監査ログを取得する。
+   * @param guildId - ギルド ID。
+   * @param limit - 最大件数。
+   */
   async listByGuild(guildId: string, limit: number): Promise<SettingsAuditLog[]> {
     // TODO(test): createdAt 降順と limit が正しく効くことを検証する。
     const filePath = dataPaths.audit(this.dataDir, guildId);

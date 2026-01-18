@@ -5,6 +5,9 @@ import { z } from 'zod';
 
 // ---- Common error response (API) ----
 // なぜ: 失敗時も code で分岐できる形にして、クライアント側の例外処理を単純にする。
+/**
+ * API のエラーコード一覧。
+ */
 export const API_ERROR_CODES = [
   'VALIDATION_FAILED',
   'UNAUTHORIZED',
@@ -14,6 +17,9 @@ export const API_ERROR_CODES = [
   'INTERNAL',
 ] as const;
 
+/**
+ * API エラーコードの schema。
+ */
 export const ApiErrorCodeSchema = z.enum(API_ERROR_CODES);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 
@@ -21,6 +27,9 @@ const ApiNonValidationErrorCodeSchema = ApiErrorCodeSchema.exclude(['VALIDATION_
 
 // なぜ: zod の flatten() 互換。フォームUI等が扱いやすい形（fieldErrors: string[]）に寄せる。
 // 注意: fieldErrors は string[] のみを許容（unknown にするとクライアントが防御的になりすぎる）。
+/**
+ * バリデーションエラーの詳細情報。
+ */
 export const ValidationErrorDetailsSchema = z.object({
   formErrors: z.array(z.string()),
   fieldErrors: z.record(z.array(z.string())),
@@ -28,6 +37,9 @@ export const ValidationErrorDetailsSchema = z.object({
 export type ValidationErrorDetails = z.infer<typeof ValidationErrorDetailsSchema>;
 
 // なぜ: code で discriminated union にして、クライアント側の switch が安全に書けるようにする。
+/**
+ * API エラーの schema（code で判別する）。
+ */
 export const ApiErrorSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('VALIDATION_FAILED'),
@@ -42,6 +54,9 @@ export const ApiErrorSchema = z.discriminatedUnion('code', [
 ]);
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
+/**
+ * API のエラー応答 schema。
+ */
 export const ApiErrorResponseSchema = z.object({
   ok: z.literal(false),
   error: ApiErrorSchema,
