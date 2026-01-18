@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { computeGuildSettingsDiff } from '@yomicord/contracts/internal';
 import {
   ActorHeadersSchema,
   GuildSettingsGetResponseSchema,
   GuildSettingsParamsSchema,
   GuildSettingsPutBodySchema,
   GuildSettingsPutResponseSchema,
-  computeGuildSettingsDiff,
   type GuildSettings,
 } from '@yomicord/contracts';
 

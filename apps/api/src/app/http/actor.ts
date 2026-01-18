@@ -1,4 +1,5 @@
-import type { Actor, ActorHeaders } from '@yomicord/contracts';
+import type { Actor } from '@yomicord/contracts/internal';
+import type { ActorHeaders } from '@yomicord/contracts';
 
 export type ActorHelpers = {
   buildActor: (headers: ActorHeaders) => Actor;

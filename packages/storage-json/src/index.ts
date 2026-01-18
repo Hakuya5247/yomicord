@@ -4,13 +4,15 @@ import path from 'node:path';
 import {
   canonicalizeGuildMemberSettings,
   createDefaultGuildSettings,
+} from '@yomicord/contracts/internal';
+import {
   DictionaryEntrySchema,
   GuildMemberSettingsSchema,
   GuildSettingsSchema,
   SettingsAuditLogSchema,
 } from '@yomicord/contracts';
+import type { Actor } from '@yomicord/contracts/internal';
 import type {
-  Actor,
   DictionaryEntry,
   GuildMemberSettings,
   GuildSettings,
