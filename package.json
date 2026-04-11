@@ -1,7 +1,7 @@
 {
   "name": "yomicord",
   "private": true,
-  "packageManager": "pnpm@10.26.2",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": "24.x"
   },
