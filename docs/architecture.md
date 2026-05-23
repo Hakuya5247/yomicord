@@ -55,3 +55,8 @@ Yomicord は Discord のチャットを音声で読み上げる Bot であり、
 - JSON Store（フェーズ1）: `docs/storage/json-store.md`
 - Runtime State: `docs/storage/runtime-state.md`
 - Storage ロードマップ: `docs/storage/roadmap.md`
+
+### 4.4 開発ガイド
+
+- コーディング規約・禁止事項・影響チェック: `docs/coding-standards.md`
+- API 変更手順・検証コマンド: `docs/runbooks/change-workflow.md`
