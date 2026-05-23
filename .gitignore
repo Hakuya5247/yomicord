@@ -40,3 +40,6 @@ coverage/
 
 # --- Data ---
 data/
+
+# --- Misc ---
+mise.toml

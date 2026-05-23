@@ -3,9 +3,12 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "containerEnv": {
+    "CODEX_HOME": "/codex"
+  },
   "remoteUser": "node",
   "postCreateCommand": "bash ./.devcontainer/postCreate.sh",
-  "mounts": ["source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind"],
+  "mounts": ["type=volume,source=codex-home,target=/codex"],
   "customizations": {
     "vscode": {
       "settings": {
