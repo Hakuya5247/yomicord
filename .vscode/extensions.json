@@ -2,7 +2,6 @@
     "recommendations": [
         "openai.chatgpt",
         "yzhang.markdown-all-in-one",
-        "eamodio.gitlens",
-        "github.copilot-chat"
+        "eamodio.gitlens"
     ]
 }
