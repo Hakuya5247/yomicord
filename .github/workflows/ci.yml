@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: チェックアウト
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: pnpm セットアップ
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
           dest: ~/setup-pnpm
@@ -29,7 +29,7 @@ jobs:
           standalone: false
 
       - name: Node.js セットアップ
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: pnpm
